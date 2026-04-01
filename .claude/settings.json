@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where claude:*)",
+      "Read(//c/Users/Asus/AppData/Local/**)",
+      "Read(//c/Users/Asus/AppData/Roaming/**)",
+      "Read(//c/Users/Asus/**)",
+      "Bash(npm install:*)"
+    ]
+  }
+}
