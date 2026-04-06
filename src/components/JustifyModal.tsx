@@ -1,7 +1,8 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { FONT } from "../constants";
 import { useTheme } from "../hooks/useTheme";
 import { Btn } from "./ui/Btn";
+import { useLang } from "../i18n";
 
 interface JustifyModalProps {
   title: string;
@@ -11,6 +12,7 @@ interface JustifyModalProps {
 
 export function JustifyModal({ title, onConfirm, onCancel }: JustifyModalProps) {
   const T = useTheme();
+  const { t } = useLang();
   const [reason, setReason] = useState("");
 
   const inp: React.CSSProperties = {
@@ -53,22 +55,22 @@ export function JustifyModal({ title, onConfirm, onCancel }: JustifyModalProps) 
         }}
       >
         <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.danger }}>
-          Aviso: {title}
+          {t("justify.notice", { title })}
         </p>
         <p style={{ margin: "0 0 14px", fontSize: 13, fontFamily: FONT, color: T.textSoft }}>
-          Es obligatorio indicar el motivo:
+          {t("justify.required")}
         </p>
         <textarea
           value={reason}
           onChange={e => setReason(e.target.value)}
           rows={4}
-          placeholder="Escribe la justificación..."
+          placeholder={t("justify.placeholder")}
           style={inp}
         />
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <Btn variant="outline" onClick={onCancel} style={{ flex: 1 }}>Cancelar</Btn>
+          <Btn variant="outline" onClick={onCancel} style={{ flex: 1 }}>{t("justify.cancel")}</Btn>
           <Btn variant="danger" onClick={() => reason.trim() && onConfirm(reason)} disabled={!reason.trim()} style={{ flex: 1 }}>
-            Confirmar
+            {t("justify.confirm")}
           </Btn>
         </div>
       </div>

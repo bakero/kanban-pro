@@ -10,10 +10,10 @@
 - Seleccion del tablero activo desde la cabecera.
 - Creacion de nuevos tableros vacios.
 - Creacion de nuevos tableros copiando la estructura del tablero actual.
-- Generacion automatica de prefijo para los identificadores de tarjetas.
+- Generacion automatica del prefijo de proyecto para los identificadores de tarjetas.
 
 ### 2. Gestion de tarjetas
-- Creacion de nuevas tarjetas con identificador secuencial por tablero.
+- Creacion de nuevas tarjetas con identificador secuencial por proyecto (formato `PROYECTO-SEQ`).
 - Apertura de una tarjeta en modal de detalle.
 - Edicion de titulo, descripcion, tipo, categoria, fecha de entrega, creador y estado.
 - Marcado manual de tarjeta bloqueada.
@@ -194,7 +194,85 @@ Usa este bloque cada vez que se implemente una funcionalidad nueva. La idea es d
 
 ---
 
+### Internacionalizacion por usuario (ES/EN)
+- Estado: `implementada`
+- Fecha: 2026-04-06
+- Objetivo: permitir que cada usuario trabaje en su idioma preferido, aplicando la traduccion en toda la app y consolas.
+- Pantalla o contexto: app principal, consola de administracion y paginas publicas.
+- Tipo: `UI` | `logica` | `datos`
+- Descripcion funcional: toda cadena visible se resuelve por clave de traduccion y se muestra segun el idioma guardado en el perfil del usuario.
+- Funcionamiento: `users.lang` almacena el idioma; al iniciar sesion se carga el idioma y se aplica via contexto. El usuario lo cambia desde el panel de perfil.
+- Reglas de negocio: el idioma se gestiona por usuario y persiste entre dispositivos; los datos de negocio no se traducen, solo la interfaz.
+- Impacto en usuario: la interfaz se adapta a Espanol (Espana) o Ingles segun la preferencia personal.
+- Archivos principales: `src/i18n/es.ts`, `src/i18n/en.ts`, `src/i18n/index.ts`, `src/App.tsx`, `src/AdminConsoleApp.tsx`, `src/components/**`.
+- Notas tecnicas: las claves se tipan en TypeScript usando `TranslationKey`.
+
+### Perfil de usuario con avatar e idioma
+- Estado: `implementada`
+- Fecha: 2026-04-06
+- Objetivo: permitir que cada usuario edite su nombre, apellidos y avatar, y que el idioma se configure desde el perfil.
+- Pantalla o contexto: panel de perfil del usuario conectado.
+- Tipo: `UI` | `logica` | `datos` | `integracion`
+- Descripcion funcional: el perfil muestra nombre, apellidos, email de solo lectura y avatar; permite subir una imagen ligera y guardar la preferencia de idioma.
+- Funcionamiento: la imagen se sube a Supabase Storage en el bucket `avatars` y se guarda `users.avatar_url`; el idioma se guarda en `users.lang`.
+- Reglas de negocio: el email nunca se puede modificar; la imagen debe ser ligera (JPG/PNG/WebP, max 512 KB).
+- Impacto en usuario: cada persona ve su foto y nombre correcto en selectores y tarjetas.
+- Archivos principales: `src/components/UserProfilePanel.tsx`, `src/components/ui/Avatar.tsx`, `src/lib/db.ts`, `docs/migrations/001_owners_codes_lang.sql`.
+- Notas tecnicas: politicas RLS limitan subida/actualizacion al propietario del fichero.
+
+### Enrutado por URL y codigos cortos
+- Estado: `implementada`
+- Fecha: 2026-04-06
+- Objetivo: permitir acceso directo por URL a empresa, workspace, proyecto, tablero y tarea, con codigos cortos y IDs.
+- Pantalla o contexto: navegacion y pegado de URLs.
+- Tipo: `UI` | `logica` | `datos`
+- Descripcion funcional: las rutas principales soportan `/app/{empresa}/{workspace?}/{proyecto}/{tablero}/{tarea?}` y `/app/{codigo}` para resolver entidades.
+- Funcionamiento: `company_code` y `projects.prefix` son codigos cortos; `workspaces.numeric_id` y `boards.numeric_id` sirven para rutas cortas; `card_id` se compone como `PROYECTO-SEQ`.
+- Reglas de negocio: el identificador de tarea es unico por proyecto; al pegar un codigo se resuelve y redirige a la entidad correspondiente.
+- Impacto en usuario: se puede compartir una URL directa y abrir cualquier recurso desde la barra del navegador.
+- Archivos principales: `src/router/AppRouter.tsx`, `src/router/SmartRedirect.tsx`, `src/lib/db.ts`, `src/App.tsx`, `docs/migrations/001_owners_codes_lang.sql`.
+- Notas tecnicas: `cards.seq_id` se genera en BD y se sincroniza con `card_id`.
+
+### Barra superior simplificada y barra secundaria configurable
+- Estado: `implementada`
+- Fecha: 2026-04-06
+- Objetivo: clarificar la navegacion con menus y permitir que cada usuario configure la barra secundaria de acciones.
+- Pantalla o contexto: cabecera de la app y vista de tablero.
+- Tipo: `UI` | `logica`
+- Descripcion funcional: la cabecera muestra menus claros para empresa, workspace, proyecto y tablero; la barra secundaria agrupa acciones de la vista de tablero y permite reordenar/ocultar botones.
+- Funcionamiento: la barra secundaria lee/escribe `users.ui_config.secondaryBar`; incluye acciones como nueva tarjeta, nuevo tablero, metricas, filtros, mejoras y ajustes.
+- Reglas de negocio: la configuracion es por usuario y se persiste en la BD.
+- Impacto en usuario: la cabecera es mas clara y las acciones frecuentes quedan personalizadas.
+- Archivos principales: `src/App.tsx`, `src/components/layout/SecondaryBar.tsx`, `src/components/layout/SecondaryBarEditor.tsx`, `src/lib/db.ts`, `src/i18n/es.ts`, `src/i18n/en.ts`.
+- Notas tecnicas: el editor usa orden manual (subir/bajar) para evitar dependencias externas.
+
+### Paginas legales publicas (placeholders)
+- Estado: `implementada`
+- Fecha: 2026-04-06
+- Objetivo: disponer de aviso legal, politica de privacidad y cookies accesibles sin autenticacion.
+- Pantalla o contexto: rutas publicas `/legal/*`.
+- Tipo: `UI`
+- Descripcion funcional: se crean paginas publicas con secciones legales y placeholders editables.
+- Funcionamiento: las paginas se muestran con tema y traduccion, e incluyen referencias a cookies tecnicas (Supabase/Vercel) en forma de placeholder.
+- Reglas de negocio: las paginas legales son siempre publicas.
+- Impacto en usuario: transparencia legal desde cualquier dispositivo.
+- Archivos principales: `src/components/legal/LegalPage.tsx`, `src/components/legal/LegalFooter.tsx`, `src/router/AppRouter.tsx`.
+- Notas tecnicas: el contenido definitivo se completara por la empresa responsable.
+
 ## Entradas futuras
+
+### Documentacion interactiva de funcionalidades y pruebas
+- Estado: `implementada`
+- Fecha: 2026-04-06
+- Objetivo: disponer de un portal interactivo con arbol de funcionalidades, requisitos y escenarios de prueba, con enlaces a la ultima ejecucion.
+- Pantalla o contexto: sitio de documentacion publicado en produccion y accesible desde la app principal y la consola de administracion.
+- Tipo: `UI` | `integracion`
+- Descripcion funcional: se crea un sitio de documentacion separado con navegacion lateral por funcionalidades de la app y la consola. Cada pagina incluye requisitos, escenarios de prueba y un bloque para el enlace a la ultima ejecucion.
+- Funcionamiento: el sitio vive en `docs-site` y se despliega como sitio estatico. La app y la consola abren la documentacion en una nueva pestaña usando `VITE_DOCS_URL` y `VITE_ADMIN_DOCS_URL`.
+- Reglas de negocio: la documentacion no debe bloquear la app; se abre en nueva pestaña; los enlaces a ejecuciones se actualizan con el ultimo run valido.
+- Impacto en usuario: los equipos disponen de un punto unico de referencia para funcionalidades, requisitos y pruebas, con trazabilidad al ultimo run.
+- Archivos principales: `docs-site/astro.config.mjs`, `docs-site/src/content/docs/index.mdx`, `docs-site/src/content/docs/app/funcionalidades/01-gestion-tableros.mdx`, `docs-site/src/content/docs/admin/funcionalidades/01-consola-global.mdx`, `src/App.tsx`, `src/admin/AdminConsolePage.tsx`, `src/constants.ts`, `src/i18n/es.ts`, `src/i18n/en.ts`
+- Notas tecnicas: el despliegue se configura en Vercel apuntando a `docs-site` como root; el enlace se controla por variables de entorno.
 
 ### Login de usuarios con Google y tableros privados por propietario
 - Estado: `implementada`

@@ -1,4 +1,4 @@
-import type { User as AuthUser } from "@supabase/supabase-js";
+﻿import type { User as AuthUser } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { DEFAULT_VISIBLE, SUPER_ADMIN_EMAIL } from "../constants";
 import { histEntry, nameInitials, strColor, uid } from "./utils";
@@ -48,19 +48,42 @@ export async function ensureUserProfile(authUser: AuthUser): Promise<User> {
   const providerList = Array.isArray(authUser.app_metadata?.providers) ? authUser.app_metadata.providers as string[] : [];
   const isGoogleUser = providerList.includes("google");
 
+  const nameParts = fullName.trim().split(/\s+/);
+  const firstName = nameParts[0] || fullName;
+  const lastName = nameParts.slice(1).join(" ") || null;
+
   const profile: User = {
     id: authUser.id,
     auth_user_id: authUser.id,
     name: fullName,
+    first_name: firstName,
+    last_name: lastName,
     email,
     initials: nameInitials(fullName),
     color: strColor(email || authUser.id),
     role: "MASTER",
     avatar_url: authUser.user_metadata?.avatar_url || null,
+    lang: "es",
+    ui_config: {},
     google_login_enabled: isGoogleUser,
     google_confirmed_at: authUser.email_confirmed_at || new Date().toISOString(),
     activation_email_sent_at: null,
   };
+
+  // Preserve existing user preferences on re-login
+  const { data: existing } = await supabase
+    .from("users")
+    .select("lang, ui_config, first_name, last_name, avatar_url")
+    .eq("id", authUser.id)
+    .maybeSingle();
+  if (existing) {
+    const ex = existing as { lang?: string; ui_config?: Record<string, unknown>; first_name?: string | null; last_name?: string | null; avatar_url?: string | null };
+    if (ex.lang) profile.lang = ex.lang;
+    if (ex.ui_config) profile.ui_config = ex.ui_config;
+    if (ex.first_name) profile.first_name = ex.first_name;
+    if (ex.last_name !== undefined) profile.last_name = ex.last_name;
+    if (ex.avatar_url) profile.avatar_url = ex.avatar_url;
+  }
 
   const { error } = await supabase.from("users").upsert(profile);
   if (error) console.error("ensureUserProfile error:", error);
@@ -88,7 +111,7 @@ export async function saveUser(user: User) {
 }
 
 // ============================================================
-// COMPANY INVITES — aceptar invitaciones pendientes al login
+// COMPANY INVITES - aceptar invitaciones pendientes al login
 // ============================================================
 
 export async function acceptPendingCompanyInvites(user: User) {
@@ -141,15 +164,19 @@ export async function createCompany(
   name: string,
   slug: string,
   contactEmail: string,
-  createdBy: string
+  createdBy: string,
+  ownerId?: string | null,
+  companyCode?: string | null
 ): Promise<Company> {
   const company: Company = {
     id: uid(),
     name,
     slug: slug.toLowerCase().replace(/\s+/g, "-"),
+    company_code: companyCode ? companyCode.trim().toUpperCase() : null,
     contact_email: contactEmail,
     license_plan: "trial",
     created_by: createdBy,
+    owner_id: ownerId || createdBy,
     created_at: new Date().toISOString(),
     is_active: true,
   };
@@ -307,6 +334,7 @@ export async function createWorkspace(
   companyId: string,
   name: string,
   createdBy: string,
+  ownerId?: string | null,
   description?: string
 ): Promise<Workspace> {
   const { data: existing } = await supabase
@@ -317,12 +345,19 @@ export async function createWorkspace(
     .limit(1);
   const nextOrder = (((existing || [])[0] as { sort_order?: number } | undefined)?.sort_order ?? -1) + 1;
 
+  let owner = ownerId || null;
+  if (!owner) {
+    const { data: companyRow } = await supabase.from("companies").select("owner_id").eq("id", companyId).maybeSingle();
+    owner = (companyRow as { owner_id?: string } | null)?.owner_id || createdBy;
+  }
+
   const ws: Workspace = {
     id: uid(),
     company_id: companyId,
     name,
     description,
     created_by: createdBy,
+    owner_id: owner,
     created_at: new Date().toISOString(),
     sort_order: nextOrder,
   };
@@ -335,7 +370,7 @@ export async function getOrCreateWorkspace(companyId: string, createdBy: string,
   const { data } = await supabase.from("workspaces").select("*").eq("company_id", companyId).order("sort_order").limit(1);
   const existing = (data || [])[0] as Workspace | undefined;
   if (existing) return existing;
-  return createWorkspace(companyId, name, createdBy, "Workspace principal");
+  return createWorkspace(companyId, name, createdBy, undefined, "Workspace principal");
 }
 
 export async function loadWorkspaces(companyId: string): Promise<Workspace[]> {
@@ -366,6 +401,7 @@ export async function createProject(
   name: string,
   prefix: string,
   createdBy: string,
+  ownerId?: string | null,
   description?: string
 ): Promise<Project> {
   const { data: existing } = await supabase
@@ -376,6 +412,18 @@ export async function createProject(
     .limit(1);
   const nextOrder = (((existing || [])[0] as { sort_order?: number } | undefined)?.sort_order ?? -1) + 1;
 
+  let owner = ownerId || null;
+  if (!owner) {
+    const { data: wsRow } = await supabase.from("workspaces").select("company_id").eq("id", workspaceId).maybeSingle();
+    const companyId = (wsRow as { company_id?: string } | null)?.company_id || null;
+    if (companyId) {
+      const { data: companyRow } = await supabase.from("companies").select("owner_id").eq("id", companyId).maybeSingle();
+      owner = (companyRow as { owner_id?: string } | null)?.owner_id || createdBy;
+    } else {
+      owner = createdBy;
+    }
+  }
+
   const project: Project = {
     id: uid(),
     workspace_id: workspaceId,
@@ -383,6 +431,7 @@ export async function createProject(
     description,
     prefix: prefix.toUpperCase(),
     created_by: createdBy,
+    owner_id: owner,
     created_at: new Date().toISOString(),
     sort_order: nextOrder,
     is_archived: false,
@@ -739,6 +788,7 @@ export async function saveCard(card: Card, actorUserId?: string) {
     col_id: card.col_id, state_id: card.state_id, title: card.title,
     description: card.description, type: card.type, category: card.category,
     due_date: card.due_date || null, blocked: card.blocked, creator_id: card.creator_id,
+    seq_id: card.seq_id ?? null,
     attachments: card.attachments, comments: card.comments, history: card.history,
     depends_on: card.depends_on, blocked_by: card.blocked_by,
     time_per_col: card.time_per_col, col_since: card.col_since,
@@ -1099,30 +1149,51 @@ export async function removeBoardMember(boardId: string, userId: string) {
 }
 
 // ============================================================
-// SEED — tablero inicial para un proyecto nuevo
+// SEED - tablero inicial para un proyecto nuevo
 // ============================================================
 
 function makeSeedCard(
-  id: string, cardId: string, boardId: string, userId: string,
-  colId: string, stateId: string, extra: Partial<Card>
+  id: string,
+  boardId: string,
+  user: User,
+  colId: string,
+  stateId: string,
+  projectPrefix: string,
+  extra: Partial<Card>
 ): Card {
+  const lang = (user.lang === "en" ? "en" : "es") as "en" | "es";
+  const cardId = `${projectPrefix.toUpperCase()}-TMP-${id.slice(0, 4)}`;
   return {
     id, card_id: cardId, board_id: boardId, col_id: colId, state_id: stateId,
-    title: "Nueva tarjeta", type: "tarea", category: "General",
-    due_date: "", blocked: false, creator_id: userId,
-    description: "", attachments: [], comments: [],
-    history: [histEntry("Tarjeta creada")],
-    depends_on: [], blocked_by: [], time_per_col: {},
-    col_since: Date.now(), created_at: new Date().toISOString(),
-    completed_at: null, discarded_at: null,
+    title: lang === "en" ? "New card" : "Nueva tarjeta",
+    type: "tarea",
+    category: lang === "en" ? "General" : "General",
+    due_date: "",
+    blocked: false,
+    creator_id: user.id,
+    description: "",
+    attachments: [],
+    comments: [],
+    history: [histEntry(lang === "en" ? "Card created" : "Tarjeta creada", user, lang)],
+    depends_on: [],
+    blocked_by: [],
+    time_per_col: {},
+    col_since: Date.now(),
+    created_at: new Date().toISOString(),
+    completed_at: null,
+    discarded_at: null,
     ...extra,
   };
 }
 
 export async function seedBoardForProject(projectId: string, user: User): Promise<Board> {
+  const isEn = user.lang === "en";
   const boardId = uid();
-  const { data: projectRow } = await supabase.from("projects").select("workspace_id").eq("id", projectId).maybeSingle();
-  const workspaceId = (projectRow as { workspace_id?: string } | null)?.workspace_id || null;
+  const { data: projectRow } = await supabase.from("projects").select("workspace_id, prefix, owner_id").eq("id", projectId).maybeSingle();
+  const projectInfo = projectRow as { workspace_id?: string; prefix?: string; owner_id?: string } | null;
+  const workspaceId = projectInfo?.workspace_id || null;
+  const projectPrefix = projectInfo?.prefix || "PRJ";
+  const projectOwner = projectInfo?.owner_id || user.id;
   let companyId = "";
   if (workspaceId) {
     const { data: ws } = await supabase.from("workspaces").select("company_id").eq("id", workspaceId).maybeSingle();
@@ -1132,45 +1203,45 @@ export async function seedBoardForProject(projectId: string, user: User): Promis
     id: boardId,
     company_id: companyId,
     project_id: projectId,
-    title: "Tablero principal",
+    title: isEn ? "Main board" : "Tablero principal",
     prefix: "TBL",
-    card_seq: 4,
-    owner_user_id: user.id,
+    card_seq: 0,
+    owner_user_id: projectOwner,
     board_config: DEFAULT_BOARD_CONFIG,
     visible_fields: DEFAULT_VISIBLE,
-    categories: ["General", "Backend", "Frontend", "Producto"],
+    categories: isEn ? ["General", "Backend", "Frontend", "Product"] : ["General", "Backend", "Frontend", "Producto"],
     sort_order: 0,
   };
 
   const states: BoardState[] = [
-    { id: uid(), board_id: boardId, name: "Pendiente", phase: "pre", is_discard: false, sort_order: 0 },
-    { id: uid(), board_id: boardId, name: "En curso", phase: "work", is_discard: false, sort_order: 1 },
-    { id: uid(), board_id: boardId, name: "Completado", phase: "post", is_discard: false, sort_order: 2 },
-    { id: uid(), board_id: boardId, name: "Descartado", phase: "post", is_discard: true, sort_order: 3 },
+    { id: uid(), board_id: boardId, name: isEn ? "Pending" : "Pendiente", phase: "pre", is_discard: false, sort_order: 0 },
+    { id: uid(), board_id: boardId, name: isEn ? "In progress" : "En curso", phase: "work", is_discard: false, sort_order: 1 },
+    { id: uid(), board_id: boardId, name: isEn ? "Done" : "Completado", phase: "post", is_discard: false, sort_order: 2 },
+    { id: uid(), board_id: boardId, name: isEn ? "Discarded" : "Descartado", phase: "post", is_discard: true, sort_order: 3 },
   ];
 
   const columns: BoardColumn[] = [
-    { id: uid(), board_id: boardId, name: "Por hacer", phase: "pre", state_ids: [states[0].id], wip_limit: 0, is_wip: false, sort_order: 0 },
-    { id: uid(), board_id: boardId, name: "En progreso", phase: "work", state_ids: [states[1].id], wip_limit: 3, is_wip: true, sort_order: 1 },
-    { id: uid(), board_id: boardId, name: "Hecho", phase: "post", state_ids: [states[2].id], wip_limit: 0, is_wip: false, sort_order: 2 },
-    { id: uid(), board_id: boardId, name: "Descartado", phase: "post", state_ids: [states[3].id], wip_limit: 0, is_wip: false, sort_order: 3 },
+    { id: uid(), board_id: boardId, name: isEn ? "To do" : "Por hacer", phase: "pre", state_ids: [states[0].id], wip_limit: 0, is_wip: false, sort_order: 0 },
+    { id: uid(), board_id: boardId, name: isEn ? "In progress" : "En progreso", phase: "work", state_ids: [states[1].id], wip_limit: 3, is_wip: true, sort_order: 1 },
+    { id: uid(), board_id: boardId, name: isEn ? "Done" : "Hecho", phase: "post", state_ids: [states[2].id], wip_limit: 0, is_wip: false, sort_order: 2 },
+    { id: uid(), board_id: boardId, name: isEn ? "Discarded" : "Descartado", phase: "post", state_ids: [states[3].id], wip_limit: 0, is_wip: false, sort_order: 3 },
   ];
 
   const cards: Card[] = [
-    makeSeedCard(uid(), "TBL-001", boardId, user.id, columns[0].id, states[0].id, {
-      title: "Configurar acceso inicial",
-      category: "General",
-      description: "Tablero creado automáticamente al crear el proyecto.",
+    makeSeedCard(uid(), boardId, user, columns[0].id, states[0].id, projectPrefix, {
+      title: isEn ? "Set up initial access" : "Configurar acceso inicial",
+      category: isEn ? "General" : "General",
+      description: isEn ? "Board created automatically when the project was created." : "Tablero creado automáticamente al crear el proyecto.",
     }),
-    makeSeedCard(uid(), "TBL-002", boardId, user.id, columns[1].id, states[1].id, {
-      title: "Invitar a colaboradores",
-      category: "Producto",
-      description: "Desde Configuración > Miembros puedes añadir usuarios al proyecto.",
+    makeSeedCard(uid(), boardId, user, columns[1].id, states[1].id, projectPrefix, {
+      title: isEn ? "Invite collaborators" : "Invitar a colaboradores",
+      category: isEn ? "Product" : "Producto",
+      description: isEn ? "From Settings > Members you can add users to the project." : "Desde Configuración > Miembros puedes añadir usuarios al proyecto.",
     }),
-    makeSeedCard(uid(), "TBL-003", boardId, user.id, columns[2].id, states[2].id, {
-      title: "Revisar funcionalidades activas",
-      category: "Producto",
-      description: "Desde Configuración > Funcionalidades activa o desactiva features.",
+    makeSeedCard(uid(), boardId, user, columns[2].id, states[2].id, projectPrefix, {
+      title: isEn ? "Review active features" : "Revisar funcionalidades activas",
+      category: isEn ? "Product" : "Producto",
+      description: isEn ? "From Settings > Features you can enable or disable features." : "Desde Configuración > Funcionalidades activa o desactiva features.",
       completed_at: new Date().toISOString(),
     }),
   ];
@@ -1178,54 +1249,55 @@ export async function seedBoardForProject(projectId: string, user: User): Promis
   await saveBoard(board);
   await Promise.all(columns.map(col => saveColumn(col)));
   await Promise.all(states.map(state => saveState(state)));
-  await Promise.all(cards.map(card => saveCard(card)));
+  await Promise.all(cards.map(card => createCard(card, projectPrefix, user.id)));
 
   return board;
 }
 
 export async function seedLegacyBoardForUser(user: User): Promise<Board> {
+  const isEn = user.lang === "en";
   const boardId = uid();
   const board = {
     id: boardId,
-    title: "Mi tablero",
+    title: isEn ? "My board" : "Mi tablero",
     prefix: "KAN",
     card_seq: 4,
     owner_user_id: user.id,
     board_config: DEFAULT_BOARD_CONFIG,
     visible_fields: DEFAULT_VISIBLE,
-    categories: ["General", "Backend", "Frontend", "Producto"],
+    categories: isEn ? ["General", "Backend", "Frontend", "Product"] : ["General", "Backend", "Frontend", "Producto"],
     created_at: new Date().toISOString(),
   } as Board;
 
   const states: BoardState[] = [
-    { id: uid(), board_id: boardId, name: "Pendiente", phase: "pre", is_discard: false, sort_order: 0 },
-    { id: uid(), board_id: boardId, name: "En curso", phase: "work", is_discard: false, sort_order: 1 },
-    { id: uid(), board_id: boardId, name: "Completado", phase: "post", is_discard: false, sort_order: 2 },
-    { id: uid(), board_id: boardId, name: "Descartado", phase: "post", is_discard: true, sort_order: 3 },
+    { id: uid(), board_id: boardId, name: isEn ? "Pending" : "Pendiente", phase: "pre", is_discard: false, sort_order: 0 },
+    { id: uid(), board_id: boardId, name: isEn ? "In progress" : "En curso", phase: "work", is_discard: false, sort_order: 1 },
+    { id: uid(), board_id: boardId, name: isEn ? "Done" : "Completado", phase: "post", is_discard: false, sort_order: 2 },
+    { id: uid(), board_id: boardId, name: isEn ? "Discarded" : "Descartado", phase: "post", is_discard: true, sort_order: 3 },
   ];
 
   const columns: BoardColumn[] = [
-    { id: uid(), board_id: boardId, name: "Por hacer", phase: "pre", state_ids: [states[0].id], wip_limit: 0, is_wip: false, sort_order: 0 },
-    { id: uid(), board_id: boardId, name: "En progreso", phase: "work", state_ids: [states[1].id], wip_limit: 3, is_wip: true, sort_order: 1 },
-    { id: uid(), board_id: boardId, name: "Hecho", phase: "post", state_ids: [states[2].id], wip_limit: 0, is_wip: false, sort_order: 2 },
-    { id: uid(), board_id: boardId, name: "Descartado", phase: "post", state_ids: [states[3].id], wip_limit: 0, is_wip: false, sort_order: 3 },
+    { id: uid(), board_id: boardId, name: isEn ? "To do" : "Por hacer", phase: "pre", state_ids: [states[0].id], wip_limit: 0, is_wip: false, sort_order: 0 },
+    { id: uid(), board_id: boardId, name: isEn ? "In progress" : "En progreso", phase: "work", state_ids: [states[1].id], wip_limit: 3, is_wip: true, sort_order: 1 },
+    { id: uid(), board_id: boardId, name: isEn ? "Done" : "Hecho", phase: "post", state_ids: [states[2].id], wip_limit: 0, is_wip: false, sort_order: 2 },
+    { id: uid(), board_id: boardId, name: isEn ? "Discarded" : "Descartado", phase: "post", state_ids: [states[3].id], wip_limit: 0, is_wip: false, sort_order: 3 },
   ];
 
   const cards: Card[] = [
-    makeSeedCard(uid(), "KAN-001", boardId, user.id, columns[0].id, states[0].id, {
-      title: "Configurar acceso inicial",
-      category: "General",
-      description: "Tablero personal creado automáticamente al iniciar sesión por primera vez.",
+    makeSeedCard(uid(), boardId, user, columns[0].id, states[0].id, board.prefix, {
+      title: isEn ? "Set up initial access" : "Configurar acceso inicial",
+      category: isEn ? "General" : "General",
+      description: isEn ? "Personal board created automatically on first sign-in." : "Tablero personal creado automáticamente al iniciar sesión por primera vez.",
     }),
-    makeSeedCard(uid(), "KAN-002", boardId, user.id, columns[1].id, states[1].id, {
-      title: "Revisar backlog de mejoras",
-      category: "Producto",
-      description: "Puedes proponer y votar mejoras desde la vista compartida.",
+    makeSeedCard(uid(), boardId, user, columns[1].id, states[1].id, board.prefix, {
+      title: isEn ? "Review improvements backlog" : "Revisar backlog de mejoras",
+      category: isEn ? "Product" : "Producto",
+      description: isEn ? "You can propose and vote on improvements from the shared view." : "Puedes proponer y votar mejoras desde la vista compartida.",
     }),
-    makeSeedCard(uid(), "KAN-003", boardId, user.id, columns[2].id, states[2].id, {
-      title: "Explorar el tablero",
-      category: "Frontend",
-      description: "Mueve tarjetas entre columnas y abre su detalle para editar campos.",
+    makeSeedCard(uid(), boardId, user, columns[2].id, states[2].id, board.prefix, {
+      title: isEn ? "Explore the board" : "Explorar el tablero",
+      category: isEn ? "Frontend" : "Frontend",
+      description: isEn ? "Move cards across columns and open details to edit fields." : "Mueve tarjetas entre columnas y abre su detalle para editar campos.",
       completed_at: new Date().toISOString(),
     }),
   ];
@@ -1233,7 +1305,7 @@ export async function seedLegacyBoardForUser(user: User): Promise<Board> {
   await saveBoard(board);
   await Promise.all(columns.map(col => saveColumn(col)));
   await Promise.all(states.map(state => saveState(state)));
-  await Promise.all(cards.map(card => saveCard(card)));
+  await Promise.all(cards.map(card => createCard(card, board.prefix, user.id)));
 
   return board;
 }
@@ -1320,4 +1392,178 @@ export async function loadAdminConsoleData(currentUserId?: string): Promise<Admi
     boards: boardSummaries,
     improvements,
   };
+}
+
+// ============================================================
+// URL ROUTING - resolucion de entidades por codigo/ID
+// ============================================================
+
+export type ResolvedEntity =
+  | { type: "company";   id: string; company: import("../types").Company }
+  | { type: "project";   id: string; project: import("../types").Project; workspaceId: string; companyId: string }
+  | { type: "card";      id: string; card: import("../types").Card; boardId: string; boardNumericId?: number | null }
+  | { type: "workspace"; id: string; workspace: import("../types").Workspace }
+  | { type: "board";     id: string; board: import("../types").Board }
+  | null;
+
+/**
+ * Resolves a short code to the matching entity:
+ * - company_code -> Company
+ * - project prefix -> Project
+ * - PROJECT-NNN pattern -> Card
+ */
+export async function resolveEntityByCode(code: string): Promise<ResolvedEntity> {
+  const raw = code.trim();
+  const clean = raw.toUpperCase();
+
+  // Card pattern: PREFIX-NUMBER
+  if (/^([A-Z0-9]{1,10})-\d+$/.test(clean)) {
+    const { data: card } = await supabase.from("cards").select("*").eq("card_id", clean).maybeSingle();
+    if (card) {
+      const { data: board } = await supabase.from("boards").select("numeric_id").eq("id", (card as Card).board_id).maybeSingle();
+      const boardNumericId = (board as { numeric_id?: number } | null)?.numeric_id ?? null;
+      return { type: "card", id: (card as Card).id, card: card as Card, boardId: (card as Card).board_id, boardNumericId };
+    }
+  }
+
+  // Try company_code
+  const { data: company } = await supabase.from("companies").select("*").ilike("company_code", clean).maybeSingle();
+  if (company) return { type: "company", id: (company as Company).id, company: company as Company };
+
+  // Try project prefix
+  const { data: project } = await supabase.from("projects").select("*").ilike("prefix", clean).maybeSingle();
+  if (project) {
+    const p = project as Project;
+    const { data: ws } = await supabase.from("workspaces").select("company_id").eq("id", p.workspace_id).maybeSingle();
+    const companyId = (ws as { company_id?: string } | null)?.company_id || "";
+    return { type: "project", id: p.id, project: p, workspaceId: p.workspace_id, companyId };
+  }
+
+  // Numeric short code (workspace/board numeric_id)
+  if (/^\d+$/.test(clean)) {
+    const numericId = Number(clean);
+    const { data: workspace } = await supabase.from("workspaces").select("*").eq("numeric_id", numericId).maybeSingle();
+    if (workspace) return { type: "workspace", id: (workspace as Workspace).id, workspace: workspace as Workspace };
+
+    const { data: board } = await supabase.from("boards").select("*").eq("numeric_id", numericId).maybeSingle();
+    if (board) return { type: "board", id: (board as Board).id, board: board as Board };
+  }
+
+  // Direct UUID lookup (company/workspace/project/board/card IDs)
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)) {
+    const { data: companyById } = await supabase.from("companies").select("*").eq("id", raw).maybeSingle();
+    if (companyById) return { type: "company", id: (companyById as Company).id, company: companyById as Company };
+
+    const { data: workspaceById } = await supabase.from("workspaces").select("*").eq("id", raw).maybeSingle();
+    if (workspaceById) return { type: "workspace", id: (workspaceById as Workspace).id, workspace: workspaceById as Workspace };
+
+    const { data: projectById } = await supabase.from("projects").select("*").eq("id", raw).maybeSingle();
+    if (projectById) {
+      const p = projectById as Project;
+      const { data: ws } = await supabase.from("workspaces").select("company_id").eq("id", p.workspace_id).maybeSingle();
+      const companyId = (ws as { company_id?: string } | null)?.company_id || "";
+      return { type: "project", id: p.id, project: p, workspaceId: p.workspace_id, companyId };
+    }
+
+    const { data: boardById } = await supabase.from("boards").select("*").eq("id", raw).maybeSingle();
+    if (boardById) return { type: "board", id: (boardById as Board).id, board: boardById as Board };
+
+    const { data: cardById } = await supabase.from("cards").select("*").eq("id", raw).maybeSingle();
+    if (cardById) {
+      const { data: board } = await supabase.from("boards").select("numeric_id").eq("id", (cardById as Card).board_id).maybeSingle();
+      const boardNumericId = (board as { numeric_id?: number } | null)?.numeric_id ?? null;
+      return { type: "card", id: (cardById as Card).id, card: cardById as Card, boardId: (cardById as Card).board_id, boardNumericId };
+    }
+  }
+
+  return null;
+}
+
+/** Resolve workspace by numeric_id (/workspace/:numericId) */
+export async function resolveWorkspaceByNumericId(numericId: number): Promise<Workspace | null> {
+  const { data } = await supabase.from("workspaces").select("*").eq("numeric_id", numericId).maybeSingle();
+  return (data || null) as Workspace | null;
+}
+
+/** Resolve board by numeric_id (/board/:numericId) */
+export async function resolveBoardByNumericId(numericId: number): Promise<Board | null> {
+  const { data } = await supabase.from("boards").select("*").eq("numeric_id", numericId).maybeSingle();
+  return (data || null) as Board | null;
+}
+
+// ============================================================
+// USER PROFILE
+// ============================================================
+
+export async function updateUserProfile(
+  userId: string,
+  updates: { first_name?: string; last_name?: string; avatar_url?: string; lang?: string }
+): Promise<void> {
+  const nameUpdate: Record<string, unknown> = { ...updates };
+  if (updates.first_name !== undefined || updates.last_name !== undefined) {
+    const { data: existing } = await supabase.from("users").select("first_name, last_name").eq("id", userId).maybeSingle();
+    const ex = (existing || {}) as { first_name?: string; last_name?: string };
+    const fn = updates.first_name ?? ex.first_name ?? "";
+    const ln = updates.last_name ?? ex.last_name ?? "";
+    nameUpdate.name = [fn, ln].filter(Boolean).join(" ") || fn;
+    nameUpdate.initials = nameInitials(nameUpdate.name as string);
+  }
+  const { error } = await supabase.from("users").update(nameUpdate).eq("id", userId);
+  if (error) console.error("updateUserProfile error:", error);
+}
+
+export async function saveUserUiConfig(userId: string, config: Record<string, unknown>): Promise<void> {
+  const { error } = await supabase.from("users").update({ ui_config: config }).eq("id", userId);
+  if (error) console.error("saveUserUiConfig error:", error);
+}
+
+// ============================================================
+// AVATAR UPLOAD
+// ============================================================
+
+export async function uploadAvatar(authUserId: string, file: File): Promise<string> {
+  const MAX_SIZE = 512 * 1024;
+  const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+  if (file.size > MAX_SIZE) throw new Error("La imagen no puede superar 512 KB");
+  if (!ALLOWED.includes(file.type)) throw new Error("Formato no admitido. Usa JPG, PNG o WebP");
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${authUserId}/${Date.now()}.${ext}`;
+  const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type });
+  if (uploadError) throw uploadError;
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+// ============================================================
+// CARD CREATION WITH DB seq_id
+// ============================================================
+
+export async function createCard(card: Card, projectPrefix: string, actorUserId?: string): Promise<Card> {
+  const payload = {
+    id: card.id, card_id: card.card_id, board_id: card.board_id,
+    col_id: card.col_id, state_id: card.state_id, title: card.title,
+    description: card.description, type: card.type, category: card.category,
+    due_date: card.due_date || null, blocked: card.blocked, creator_id: card.creator_id,
+    attachments: card.attachments, comments: card.comments, history: card.history,
+    depends_on: card.depends_on, blocked_by: card.blocked_by,
+    time_per_col: card.time_per_col, col_since: card.col_since,
+    created_at: card.created_at, completed_at: card.completed_at, discarded_at: card.discarded_at,
+  };
+  const { data: inserted, error } = await supabase.from("cards").insert(payload).select("seq_id").single();
+  if (error) {
+    console.error("createCard insert error:", error);
+    await saveCard(card, actorUserId);
+    return card;
+  }
+  const seqId = (inserted as { seq_id?: number }).seq_id;
+  const finalCardId = seqId ? `${projectPrefix.toUpperCase()}-${seqId}` : card.card_id;
+  if (seqId) await supabase.from("cards").update({ card_id: finalCardId }).eq("id", card.id);
+  const finalCard: Card = { ...card, card_id: finalCardId, seq_id: seqId ?? null };
+  if (actorUserId) {
+    const companyId = await resolveBoardCompany(card.board_id);
+    if (companyId) {
+      await logBoardChange({ company_id: companyId, board_id: card.board_id, user_id: actorUserId, entity_id: card.id, entity_type: "card", change: "card_create" });
+    }
+  }
+  return finalCard;
 }

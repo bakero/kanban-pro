@@ -1,9 +1,10 @@
-import { FONT, PHASE_COLORS } from "../constants";
+﻿import { FONT, PHASE_COLORS } from "../constants";
 import { useTheme } from "../hooks/useTheme";
 import { daysSince } from "../lib/utils";
 import { Avatar } from "./ui/Avatar";
 import { TypeIcon } from "./ui/TypeIcon";
 import type { BoardColumn, BoardState, Card, FeatureFlags, User } from "../types";
+import { useLang } from "../i18n";
 
 interface KCardProps {
   card: Card;
@@ -18,6 +19,7 @@ interface KCardProps {
 
 export function KCard({ card, columns, states, users, allCards, featureFlags, onOpen, onDragStart }: KCardProps) {
   const T = useTheme();
+  const { t } = useLang();
   const creator = users.find(u => u.id === card.creator_id);
   const due = card.due_date ? new Date(card.due_date) : null;
   const overdue = due && due < new Date();
@@ -74,7 +76,7 @@ export function KCard({ card, columns, states, users, allCards, featureFlags, on
         </span>
         {card.blocked && (
           <span style={{ fontSize: 9, fontWeight: 700, color: T.danger, background: T.dangerSoft, borderRadius: 20, padding: "2px 7px", fontFamily: FONT }}>
-            BLOQ.
+            {t("card.blockedShort")}
           </span>
         )}
         {creator && <Avatar user={creator} size={20} />}
@@ -118,7 +120,7 @@ export function KCard({ card, columns, states, users, allCards, featureFlags, on
             color: "#fff",
             flexShrink: 0,
           }}
-          title={`${daysInCol} días en este estado`}
+          title={t("card.daysInState", { days: daysInCol })}
         >
           {daysInCol}
         </div>

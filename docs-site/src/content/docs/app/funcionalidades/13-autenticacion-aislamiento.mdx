@@ -1,0 +1,26 @@
+﻿---
+title: Autenticacion y aislamiento por empresa
+description: Login Google y segregacion multi-tenant.
+---
+
+## Objetivo
+Garantizar acceso seguro y aislamiento por empresa.
+
+## Funcionamiento
+- Login con Google via Supabase Auth.
+- Usuario pertenece a una sola empresa.
+- Datos filtrados por empresa.
+
+## Reglas de negocio
+- El super admin puede acceder a todo.
+
+## Requisitos
+- Usuarios sin empresa deben ver mensaje de acceso.
+
+## Escenarios de prueba
+1. Login sin empresa y validar bloqueo.
+2. Login con empresa y validar carga de datos.
+
+## Ultima ejecucion
+- Preview: pendiente
+- Produccion: pendiente

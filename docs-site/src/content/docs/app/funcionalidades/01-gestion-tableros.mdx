@@ -1,0 +1,28 @@
+﻿---
+title: Gestion de tableros Kanban
+description: Seleccion y creacion de tableros.
+---
+
+## Objetivo
+Permitir crear y seleccionar tableros Kanban por proyecto.
+
+## Funcionamiento
+- La cabecera permite seleccionar el tablero activo.
+- Se puede crear un tablero vacio o copiar columnas y estados del tablero actual.
+- Los prefijos de tarjetas se generan automaticamente.
+
+## Reglas de negocio
+- Cada tablero pertenece a un proyecto.
+- El prefijo de tarjetas debe ser unico por tablero.
+
+## Requisitos
+- El selector de tablero debe mostrar solo tableros accesibles.
+- Crear tablero debe generar prefijo y estructura inicial.
+
+## Escenarios de prueba
+1. Crear tablero vacio y verificar que aparece en el selector.
+2. Crear tablero copiando estructura y verificar columnas/estados clonados.
+
+## Ultima ejecucion
+- Preview: pendiente
+- Produccion: pendiente

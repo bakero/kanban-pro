@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { FONT } from "../constants";
 import { useTheme } from "../hooks/useTheme";
+import { useLang } from "../i18n";
 import {
   addImprovementVote,
   loadImprovements,
@@ -17,6 +18,8 @@ interface ImprovementsPageProps {
 
 export function ImprovementsPage({ currentUser, companyId, onBack }: ImprovementsPageProps) {
   const T = useTheme();
+  const { t, lang } = useLang();
+  const locale = lang === "es" ? "es-ES" : "en-US";
   const [improvements, setImprovements] = useState<Improvement[]>([]);
   const [view, setView] = useState<"pending" | "history">("pending");
   const [sortBy, setSortBy] = useState<"votes" | "recent">("votes");
@@ -75,14 +78,14 @@ export function ImprovementsPage({ currentUser, companyId, onBack }: Improvement
     if (status === "ai_pending") {
       return (
         <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: T.warningSoft, color: T.warning, fontFamily: FONT }}>
-          APROBADA PARA IA
+          {t("improvements.approvedAI")}
         </span>
       );
     }
 
     return (
       <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: T.bgSoft, color: T.textSoft, fontFamily: FONT }}>
-        PENDIENTE
+        {t("improvements.pendingBadge")}
       </span>
     );
   }
@@ -91,16 +94,16 @@ export function ImprovementsPage({ currentUser, companyId, onBack }: Improvement
     <div style={{ fontFamily: FONT, backgroundColor: T.bgSoft, minHeight: "100vh" }}>
       <div style={{ backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, padding: "14px 22px", display: "flex", alignItems: "center", gap: 14, backdropFilter: "blur(18px)" }}>
         <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: T.textSoft, padding: 0 }}>
-          ← Volver
+          ← {t("common.back")}
         </button>
         <span style={{ color: T.border }}>|</span>
-        <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.text }}>Mejoras compartidas</span>
+        <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("improvements.sharedTitle")}</span>
         <div style={{ flex: 1 }} />
         <Btn variant={sortBy === "votes" ? "filterOn" : "filter"} onClick={() => setSortBy("votes")} style={{ fontSize: 12, padding: "5px 13px" }}>
-          Mas votadas
+          {t("improvements.filterMostVoted")}
         </Btn>
         <Btn variant={sortBy === "recent" ? "filterOn" : "filter"} onClick={() => setSortBy("recent")} style={{ fontSize: 12, padding: "5px 13px" }}>
-          Mas recientes
+          {t("improvements.filterRecent")}
         </Btn>
         <button
           onClick={() => setView(v => v === "pending" ? "history" : "pending")}
@@ -116,84 +119,92 @@ export function ImprovementsPage({ currentUser, companyId, onBack }: Improvement
             cursor: "pointer",
           }}
         >
-          {view === "pending" ? "Ver historial" : "Ver pendientes"}
+          {view === "pending" ? t("improvements.viewHistory") : t("improvements.viewPending")}
         </button>
       </div>
 
       <div style={{ maxWidth: 860, margin: "0 auto", padding: "22px 20px" }}>
         {loading ? (
-          <p style={{ color: T.textSoft, fontFamily: FONT, textAlign: "center", padding: 40 }}>Cargando...</p>
+          <p style={{ color: T.textSoft, fontFamily: FONT, textAlign: "center", padding: 40 }}>{t("improvements.loading")}</p>
         ) : view === "pending" ? (
           <>
             <div style={{ marginBottom: 16 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: T.text, fontFamily: FONT }}>
-                Pendientes ({pending.length})
+                {t("improvements.pendingTitle", { count: pending.length })}
               </span>
               <p style={{ margin: "6px 0 0", fontSize: 11, color: T.textSoft, fontFamily: FONT }}>
-                Cualquier usuario puede proponer mejoras y votar. La aprobacion para implementacion se realiza desde la consola central.
+                {t("improvements.pendingHint")}
               </p>
             </div>
 
             {pending.length === 0 ? (
               <div style={{ textAlign: "center", padding: "40px 20px", color: T.textSoft, fontFamily: FONT, fontSize: 13 }}>
-                No hay mejoras pendientes
+                {t("improvements.nonePending")}
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {pending.map(imp => (
-                  <div
-                    key={imp.id}
-                    style={{
-                      border: `1.5px solid ${T.border}`,
-                      borderRadius: 12,
-                      padding: "12px 14px",
-                      display: "flex",
-                      gap: 12,
-                      alignItems: "flex-start",
-                      backgroundColor: T.bgCard || T.bg,
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <p style={{ margin: "0 0 5px", fontSize: 13, color: T.text, fontFamily: FONT }}>
-                        {imp.description}
-                      </p>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        {statusBadge(imp.status)}
-                        <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT }}>{imp.user_name}</span>
-                        <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT }}>
-                          {new Date(imp.created_at).toLocaleString("es-ES")}
-                        </span>
-                        {imp.board_title && (
-                          <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT, background: T.bgSoft, borderRadius: 20, padding: "1px 7px" }}>
-                            {imp.board_title}
+                {pending.map(imp => {
+                  const contextLabel = imp.context === "board"
+                    ? t("improvements.contextBoard")
+                    : imp.context === "card"
+                      ? t("improvements.contextCard")
+                      : imp.context;
+                  return (
+                    <div
+                      key={imp.id}
+                      style={{
+                        border: `1.5px solid ${T.border}`,
+                        borderRadius: 12,
+                        padding: "12px 14px",
+                        display: "flex",
+                        gap: 12,
+                        alignItems: "flex-start",
+                        backgroundColor: T.bgCard || T.bg,
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: "0 0 5px", fontSize: 13, color: T.text, fontFamily: FONT }}>
+                          {imp.description}
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          {statusBadge(imp.status)}
+                          <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT }}>{imp.user_name}</span>
+                          <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT }}>
+                            {new Date(imp.created_at).toLocaleString(locale)}
                           </span>
-                        )}
-                        <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT, background: T.bgSoft, borderRadius: 20, padding: "1px 7px" }}>
-                          {imp.context}
-                        </span>
+                          {imp.board_title && (
+                            <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT, background: T.bgSoft, borderRadius: 20, padding: "1px 7px" }}>
+                              {imp.board_title}
+                            </span>
+                          )}
+                          <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT, background: T.bgSoft, borderRadius: 20, padding: "1px 7px" }}>
+                            {contextLabel}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                        <button
+                          onClick={() => void toggleVote(imp)}
+                          disabled={votingId === imp.id}
+                          title={imp.current_user_voted ? t("improvements.voted") : t("improvements.vote")}
+                          style={{
+                            border: `1px solid ${imp.current_user_voted ? T.success : T.border}`,
+                            background: imp.current_user_voted ? T.successSoft : "transparent",
+                            color: imp.current_user_voted ? T.success : T.textSoft,
+                            borderRadius: 999,
+                            padding: "6px 10px",
+                            cursor: "pointer",
+                            fontFamily: FONT,
+                            fontSize: 12,
+                            fontWeight: 700,
+                          }}
+                        >
+                          👍 {imp.vote_count || 0}
+                        </button>
                       </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                      <button
-                        onClick={() => void toggleVote(imp)}
-                        disabled={votingId === imp.id}
-                        style={{
-                      border: `1px solid ${imp.current_user_voted ? T.success : T.border}`,
-                      background: imp.current_user_voted ? T.successSoft : "transparent",
-                      color: imp.current_user_voted ? T.success : T.textSoft,
-                          borderRadius: 999,
-                          padding: "6px 10px",
-                          cursor: "pointer",
-                          fontFamily: FONT,
-                          fontSize: 12,
-                          fontWeight: 700,
-                        }}
-                      >
-                        👍 {imp.vote_count || 0}
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </>
@@ -201,13 +212,13 @@ export function ImprovementsPage({ currentUser, companyId, onBack }: Improvement
           <>
             <div style={{ marginBottom: 16 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: T.text, fontFamily: FONT }}>
-                Historial compartido de mejoras aplicadas ({applied.length})
+                {t("improvements.appliedTitle", { count: applied.length })}
               </span>
             </div>
 
             {applied.length === 0 ? (
               <div style={{ textAlign: "center", padding: "40px 20px", color: T.textSoft, fontFamily: FONT, fontSize: 13 }}>
-                Aun no se han aplicado mejoras
+                {t("improvements.noneApplied")}
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -229,15 +240,15 @@ export function ImprovementsPage({ currentUser, companyId, onBack }: Improvement
                     )}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: T.successSoft, color: T.success, fontFamily: FONT }}>
-                        APLICADA
+                        {t("improvements.applied")}
                       </span>
                       <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT }}>{imp.user_name}</span>
                       <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT }}>
-                        Propuesta: {new Date(imp.created_at).toLocaleString("es-ES")}
+                        {t("improvements.proposedAt", { date: new Date(imp.created_at).toLocaleString(locale) })}
                       </span>
                       {imp.applied_at && (
                         <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT }}>
-                          Aplicada: {new Date(imp.applied_at).toLocaleString("es-ES")}
+                          {t("improvements.appliedAt", { date: new Date(imp.applied_at).toLocaleString(locale) })}
                         </span>
                       )}
                       <span style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT }}>

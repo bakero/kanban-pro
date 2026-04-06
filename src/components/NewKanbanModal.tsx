@@ -1,7 +1,8 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { FONT } from "../constants";
 import { useTheme } from "../hooks/useTheme";
 import { Btn } from "./ui/Btn";
+import { useLang } from "../i18n";
 
 interface NewKanbanModalProps {
   onClose: () => void;
@@ -10,6 +11,7 @@ interface NewKanbanModalProps {
 
 export function NewKanbanModal({ onClose, onCreate }: NewKanbanModalProps) {
   const T = useTheme();
+  const { t } = useLang();
   const [mode,  setMode]  = useState("empty");
   const [title, setTitle] = useState("");
 
@@ -21,8 +23,8 @@ export function NewKanbanModal({ onClose, onCreate }: NewKanbanModalProps) {
   };
 
   const OPTIONS: [string, string, string][] = [
-    ["empty", "Vacío",         "Desde cero"],
-    ["copy",  "Copiar actual", "Mismas columnas y estados"],
+    ["empty", t("newBoard.optionEmpty"), t("newBoard.optionEmptyHint")],
+    ["copy",  t("newBoard.optionCopy"), t("newBoard.optionCopyHint")],
   ];
 
   return (
@@ -35,16 +37,16 @@ export function NewKanbanModal({ onClose, onCreate }: NewKanbanModalProps) {
         width: "100%", maxWidth: 380, padding: 22,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.text }}>Nuevo Kanban</span>
-          <Btn variant="ghost" onClick={onClose} style={{ padding: "2px 8px" }}>✕</Btn>
+          <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("newBoard.modalTitle")}</span>
+          <Btn variant="ghost" onClick={onClose} style={{ padding: "2px 8px" }}>×</Btn>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 4 }}>Título</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ej: Proyecto Alpha" style={inp} />
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 4 }}>{t("newBoard.name")}</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder={t("newBoard.placeholder")} style={inp} />
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 7 }}>Configuración</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 7 }}>{t("newBoard.config")}</label>
             <div style={{ display: "flex", gap: 8 }}>
               {OPTIONS.map(([m, l, d]) => (
                 <div key={m} onClick={() => setMode(m)} style={{
@@ -59,9 +61,9 @@ export function NewKanbanModal({ onClose, onCreate }: NewKanbanModalProps) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <Btn variant="outline" onClick={onClose} style={{ flex: 1 }}>Cancelar</Btn>
+            <Btn variant="outline" onClick={onClose} style={{ flex: 1 }}>{t("newBoard.cancel")}</Btn>
             <Btn variant="primary" onClick={() => title.trim() && onCreate(title.trim(), mode)}
-              disabled={!title.trim()} style={{ flex: 1 }}>Crear</Btn>
+              disabled={!title.trim()} style={{ flex: 1 }}>{t("newBoard.create")}</Btn>
           </div>
         </div>
       </div>

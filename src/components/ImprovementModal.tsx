@@ -1,10 +1,11 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { createPortal } from "react-dom";
 import { FONT } from "../constants";
 import { useTheme } from "../hooks/useTheme";
 import { saveImprovement } from "../lib/db";
 import { uid } from "../lib/utils";
 import { Btn } from "./ui/Btn";
+import { useLang } from "../i18n";
 import type { Improvement } from "../types";
 
 interface ImprovementModalProps {
@@ -18,9 +19,11 @@ interface ImprovementModalProps {
 
 export function ImprovementModal({ companyId, boardId, userId, userName, context, onClose }: ImprovementModalProps) {
   const T = useTheme();
+  const { t } = useLang();
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const contextLabel = context === "board" ? t("improvements.contextBoard") : context === "card" ? t("improvements.contextCard") : context;
 
   async function handleSubmit() {
     if (!description.trim()) return;
@@ -58,18 +61,18 @@ export function ImprovementModal({ companyId, boardId, userId, userName, context
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
           <span style={{ fontSize: 18 }}>💡</span>
           <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.text, flex: 1 }}>
-            Proponer mejora
+            {t("improvements.modalTitle")}
           </span>
-          <Btn variant="ghost" onClick={onClose} style={{ padding: "2px 8px" }}>✕</Btn>
+          <Btn variant="ghost" onClick={onClose} style={{ padding: "2px 8px" }}>×</Btn>
         </div>
 
         <p style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, fontFamily: FONT, margin: "0 0 4px" }}>
-          Describe el problema o mejora que has encontrado
+          {t("improvements.describeHint")}
         </p>
         <textarea
           value={description}
           onChange={e => setDescription(e.target.value)}
-          placeholder="Ej: Los filtros no persisten al recargar la página..."
+          placeholder={t("improvements.describePlaceholder")}
           rows={4}
           style={{
             fontFamily: FONT, fontSize: 13, borderRadius: 9,
@@ -79,23 +82,23 @@ export function ImprovementModal({ companyId, boardId, userId, userName, context
           }}
         />
         <p style={{ fontSize: 10, color: T.textSoft, fontFamily: FONT, margin: "4px 0 14px" }}>
-          Origen: <strong>{context}</strong> — {userName}
+          {t("improvements.origin", { context: contextLabel, user: userName })}
         </p>
 
         {saved ? (
           <div style={{ textAlign: "center", padding: "8px 0", fontSize: 13, fontWeight: 700, color: "#1D9E75", fontFamily: FONT }}>
-            ✓ Mejora registrada
+            ✓ {t("improvements.saved")}
           </div>
         ) : (
           <div style={{ display: "flex", gap: 8 }}>
-            <Btn variant="outline" onClick={onClose} style={{ flex: 1 }}>Cancelar</Btn>
+            <Btn variant="outline" onClick={onClose} style={{ flex: 1 }}>{t("improvements.cancel")}</Btn>
             <Btn
               variant="primary"
               onClick={handleSubmit}
               disabled={!description.trim() || saving}
               style={{ flex: 1 }}
             >
-              {saving ? "Guardando…" : "Enviar"}
+              {saving ? t("improvements.saving") : t("improvements.send")}
             </Btn>
           </div>
         )}

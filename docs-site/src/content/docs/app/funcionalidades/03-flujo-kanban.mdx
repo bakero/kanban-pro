@@ -1,0 +1,29 @@
+﻿---
+title: Flujo Kanban y movimiento de trabajo
+description: Movimiento entre columnas y estados.
+---
+
+## Objetivo
+Garantizar el flujo visual y operativo de tarjetas entre fases.
+
+## Funcionamiento
+- Drag and drop entre columnas.
+- Cambio de estado automatico al mover.
+- Control de limites WIP por columna.
+- Reapertura o descarte con justificacion.
+
+## Reglas de negocio
+- No se puede superar el limite WIP sin aviso.
+- Reabrir o descartar requiere justificacion.
+
+## Requisitos
+- El drag and drop debe conservar integridad de estado.
+- Las fechas de completado o descarte se registran.
+
+## Escenarios de prueba
+1. Mover tarjeta a columna WIP y validar contador.
+2. Descartar tarjeta y exigir justificacion.
+
+## Ultima ejecucion
+- Preview: pendiente
+- Produccion: pendiente

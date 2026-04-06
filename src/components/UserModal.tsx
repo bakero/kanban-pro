@@ -1,8 +1,9 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { FONT } from "../constants";
 import { useTheme } from "../hooks/useTheme";
 import { uid, nameInitials, strColor } from "../lib/utils";
 import { Btn } from "./ui/Btn";
+import { useLang } from "../i18n";
 import type { User } from "../types";
 
 interface UserModalProps {
@@ -12,6 +13,7 @@ interface UserModalProps {
 
 export function UserModal({ onClose, onSave }: UserModalProps) {
   const T = useTheme();
+  const { t } = useLang();
   const [name,  setName]  = useState("");
   const [email, setEmail] = useState("");
   const [role,  setRole]  = useState<"MASTER" | "USER">("USER");
@@ -25,8 +27,8 @@ export function UserModal({ onClose, onSave }: UserModalProps) {
   };
 
   function submit() {
-    if (!name.trim()) { setErr("Nombre obligatorio."); return; }
-    if (!email.trim() || !email.includes("@")) { setErr("Email inválido."); return; }
+    if (!name.trim()) { setErr(t("userModal.nameRequired")); return; }
+    if (!email.trim() || !email.includes("@")) { setErr(t("userModal.emailInvalid")); return; }
     onSave({ id: uid(), name: name.trim(), email: email.trim(), initials: nameInitials(name), color: strColor(email), role });
   }
 
@@ -40,20 +42,20 @@ export function UserModal({ onClose, onSave }: UserModalProps) {
         width: "100%", maxWidth: 380, padding: 22,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.text }}>Nuevo usuario</span>
-          <Btn variant="ghost" onClick={onClose} style={{ padding: "2px 8px" }}>✕</Btn>
+          <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("userModal.title")}</span>
+          <Btn variant="ghost" onClick={onClose} style={{ padding: "2px 8px" }}>×</Btn>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 4 }}>Nombre</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 4 }}>{t("userModal.name")}</label>
             <input value={name} onChange={e => setName(e.target.value)} style={inp} />
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 4 }}>Email</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 4 }}>{t("userModal.email")}</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={inp} />
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 7 }}>Rol</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 7 }}>{t("userModal.role")}</label>
             <div style={{ display: "flex", gap: 8 }}>
               {(["MASTER", "USER"] as const).map(r => (
                 <div key={r} onClick={() => setRole(r)} style={{
@@ -61,16 +63,20 @@ export function UserModal({ onClose, onSave }: UserModalProps) {
                   border: `2px solid ${role === r ? "#7F77DD" : T.border}`,
                   backgroundColor: role === r ? "#7F77DD11" : T.bgSoft, cursor: "pointer",
                 }}>
-                  <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 700, fontFamily: FONT, color: role === r ? "#7F77DD" : T.text }}>{r}</p>
-                  <p style={{ margin: 0, fontSize: 11, fontFamily: FONT, color: T.textSoft }}>{r === "MASTER" ? "Configura todo" : "Crea y mueve"}</p>
+                  <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 700, fontFamily: FONT, color: role === r ? "#7F77DD" : T.text }}>
+                    {r === "MASTER" ? t("userModal.roleMaster") : t("userModal.roleUser")}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 11, fontFamily: FONT, color: T.textSoft }}>
+                    {r === "MASTER" ? t("userModal.roleMasterHint") : t("userModal.roleUserHint")}
+                  </p>
                 </div>
               ))}
             </div>
           </div>
           {err && <p style={{ margin: 0, fontSize: 12, color: "#c0392b", fontFamily: FONT }}>{err}</p>}
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <Btn variant="outline" onClick={onClose} style={{ flex: 1 }}>Cancelar</Btn>
-            <Btn variant="primary" onClick={submit} style={{ flex: 1 }}>Añadir</Btn>
+            <Btn variant="outline" onClick={onClose} style={{ flex: 1 }}>{t("userModal.cancel")}</Btn>
+            <Btn variant="primary" onClick={submit} style={{ flex: 1 }}>{t("userModal.add")}</Btn>
           </div>
         </div>
       </div>

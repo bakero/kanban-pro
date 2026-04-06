@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { FONT, SUPER_ADMIN_EMAIL } from "../constants";
+﻿import { useEffect, useMemo, useState } from "react";
+import { ADMIN_DOCS_URL, FONT, SUPER_ADMIN_EMAIL } from "../constants";
 import { useTheme, useThemeMode } from "../hooks/useTheme";
+import { useLang } from "../i18n";
 import {
   assignUserToCompany,
   createCompany,
@@ -60,7 +61,10 @@ interface AdminConsolePageProps {
 
 export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps) {
   const T = useTheme();
+  const { t, lang } = useLang();
+  const locale = lang === "es" ? "es-ES" : "en-US";
   const { mode, setMode } = useThemeMode();
+  const adminDocsUrl = ADMIN_DOCS_URL;
   const [section, setSection] = useState<AdminSection>("empresas");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -78,6 +82,7 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
 
   const [newCompanyName, setNewCompanyName] = useState("");
   const [newCompanyEmail, setNewCompanyEmail] = useState("");
+  const [newCompanyCode, setNewCompanyCode] = useState("");
   const [newCompanyFeedback, setNewCompanyFeedback] = useState("");
 
   const [memberEmail, setMemberEmail] = useState("");
@@ -94,15 +99,15 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
   const isSuperAdmin = currentUser.email.toLowerCase() === SUPER_ADMIN_EMAIL;
 
   const sections: { id: AdminSection; label: string }[] = [
-    { id: "empresas", label: "Empresas" },
-    { id: "usuarios", label: "Usuarios" },
-    { id: "proyectos", label: "Proyectos" },
-    { id: "tableros", label: "Tableros" },
-    { id: "trabajos", label: "Trabajos" },
-    { id: "mejoras", label: "Mejoras" },
-    { id: "logs", label: "Logs" },
-    { id: "backups", label: "Backups" },
-    { id: "funcionalidades", label: "Funcionalidades" },
+    { id: "empresas", label: t("admin.section.companies") },
+    { id: "usuarios", label: t("admin.section.users") },
+    { id: "proyectos", label: t("admin.section.projects") },
+    { id: "tableros", label: t("admin.section.boards") },
+    { id: "trabajos", label: t("admin.section.cards") },
+    { id: "mejoras", label: t("admin.section.improvements") },
+    { id: "logs", label: t("admin.section.logs") },
+    { id: "backups", label: t("admin.section.backups") },
+    { id: "funcionalidades", label: t("admin.section.features") },
   ];
 
   const inputStyle: React.CSSProperties = {
@@ -166,16 +171,19 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
     const name = newCompanyName.trim();
     const email = newCompanyEmail.trim().toLowerCase();
     if (!name || !email.includes("@")) {
-      setNewCompanyFeedback("Nombre y email de contacto son obligatorios.");
+      setNewCompanyFeedback(t("admin.companyCreateMissing"));
       return;
     }
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    const company = await createCompany(name, slug, email, currentUser.id);
+    const { data: ownerRow } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
+    const ownerId = (ownerRow as { id?: string } | null)?.id || currentUser.id;
+    const company = await createCompany(name, slug, email, currentUser.id, ownerId, newCompanyCode.trim() || null);
     setCompanies(prev => [...prev, company]);
     setSelectedCompany(company);
     setNewCompanyName("");
     setNewCompanyEmail("");
-    setNewCompanyFeedback(`Empresa creada: ${name}.`);
+    setNewCompanyCode("");
+    setNewCompanyFeedback(t("admin.companyCreated", { name }));
   }
 
   async function handleToggleCompanyActive(company: Company) {
@@ -189,19 +197,19 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
     if (!selectedCompany) return;
     const email = memberEmail.trim().toLowerCase();
     if (!email.includes("@")) {
-      setMemberFeedback("Email invalido.");
+      setMemberFeedback(t("admin.memberEmailInvalid"));
       return;
     }
     const { data: userRow } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
     if (!userRow) {
-      setMemberFeedback("El usuario debe iniciar sesion al menos una vez.");
+      setMemberFeedback(t("admin.memberNeedsLogin"));
       return;
     }
     await assignUserToCompany(selectedCompany.id, (userRow as User).id, memberRole, currentUser.id);
     const updated = await loadCompanyMembers(selectedCompany.id);
     setMembers(updated);
     setMemberEmail("");
-    setMemberFeedback(`Usuario asignado como ${memberRole}.`);
+    setMemberFeedback(t("admin.memberAssigned", { role: memberRole }));
   }
 
   async function handleCreateProject() {
@@ -209,7 +217,7 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
     const name = projectName.trim();
     const prefix = projectPrefix.trim().toUpperCase();
     if (!name || !prefix) {
-      setProjectFeedback("Nombre y prefijo son obligatorios.");
+      setProjectFeedback(t("admin.projectRequired"));
       return;
     }
     const workspace = await getOrCreateWorkspace(selectedCompany.id, currentUser.id);
@@ -218,7 +226,7 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
     setProjects(projs);
     setProjectName("");
     setProjectPrefix("");
-    setProjectFeedback("Proyecto creado.");
+    setProjectFeedback(t("admin.projectCreated"));
   }
 
   async function handleUpdateCompanySettings(partial: Partial<CompanySettings>) {
@@ -237,12 +245,12 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
 
   async function handleCreateBackup() {
     if (!selectedCompany) return;
-    const summary = backupSummary.trim() || "Backup manual";
+    const summary = backupSummary.trim() || t("settings.backupManualDefault");
     await createCompanyBackup(selectedCompany.id, currentUser.id, summary);
     const refreshed = await loadCompanyBackups(selectedCompany.id);
     setBackups(refreshed);
     setBackupSummary("");
-    setBackupFeedback("Backup generado.");
+    setBackupFeedback(t("settings.backupGenerated"));
   }
 
   async function handleCompanyFeatureToggle(featureKey: string, enabled: boolean) {
@@ -268,7 +276,7 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
   if (!isSuperAdmin) {
     return (
       <div style={{ fontFamily: FONT, padding: 32, color: T.danger, fontWeight: 700 }}>
-        Acceso denegado.
+        {t("admin.accessDenied")}
       </div>
     );
   }
@@ -276,7 +284,7 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
   if (loading) {
     return (
       <div style={{ fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: T.bg }}>
-        <p style={{ color: T.textSoft }}>Cargando consola...</p>
+        <p style={{ color: T.textSoft }}>{t("app.loadingConsole")}</p>
       </div>
     );
   }
@@ -285,23 +293,29 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
     <div style={{ fontFamily: FONT, backgroundColor: T.bgSoft, minHeight: "100vh" }}>
       <div style={{ backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, padding: "14px 22px", display: "flex", alignItems: "center", gap: 14, backdropFilter: "blur(18px)", position: "sticky", top: 0, zIndex: 20 }}>
         <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: T.textSoft, padding: 0 }}>
-          ← Volver
+          {t("common.back")}
         </button>
         <span style={{ color: T.border }}>|</span>
-        <span style={{ fontSize: 15, fontWeight: 800, fontFamily: FONT, color: T.text }}>Consola Administracion</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: T.danger, padding: "6px 10px", borderRadius: 999, background: T.dangerSoft, border: `1px solid ${T.border}` }}>Super admin</span>
+        <span style={{ fontSize: 15, fontWeight: 800, fontFamily: FONT, color: T.text }}>{t("admin.consoleTitle")}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: T.danger, padding: "6px 10px", borderRadius: 999, background: T.dangerSoft, border: `1px solid ${T.border}` }}>{t("admin.superAdminBadge")}</span>
         {selectedCompany && (
           <span style={{ fontSize: 12, color: T.textSoft }}>{selectedCompany.name}</span>
         )}
         <div style={{ flex: 1 }} />
+        <button
+          onClick={() => window.open(adminDocsUrl, "_blank", "noopener,noreferrer")}
+          style={{ fontFamily: FONT, fontSize: 12, fontWeight: 700, borderRadius: 12, padding: "10px 12px", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}
+        >
+          {t("menu.docs")}
+        </button>
         <select
           value={mode}
           onChange={e => setMode(e.target.value as "system" | "light" | "dark")}
           style={{ fontFamily: FONT, fontSize: 12, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text }}
         >
-          <option value="system">Tema sistema</option>
-          <option value="light">Modo claro</option>
-          <option value="dark">Modo oscuro</option>
+          <option value="system">{t("theme.system")}</option>
+          <option value="light">{t("theme.light")}</option>
+          <option value="dark">{t("theme.dark")}</option>
         </select>
       </div>
 
@@ -319,7 +333,7 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
           {section === "empresas" && (
             <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
               <div style={{ flex: 1, minWidth: 280 }}>
-                <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Empresas ({companies.length})</h2>
+                <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.companiesTitle", { count: companies.length })}</h2>
                 {companies.map(company => (
                   <div key={company.id}
                     onClick={() => setSelectedCompany(company)}
@@ -330,24 +344,26 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
                         <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>{company.contact_email}</p>
                       </div>
                       <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: company.is_active ? T.successSoft : T.dangerSoft, color: company.is_active ? T.success : T.danger, border: `1px solid ${company.is_active ? `${T.success}33` : `${T.danger}33`}` }}>
-                        {company.is_active ? "Activa" : "Inactiva"}
+                        {company.is_active ? t("admin.companyActive") : t("admin.companyInactive")}
                       </span>
                       <Btn variant={company.is_active ? "danger" : "primary"}
                         onClick={() => { void handleToggleCompanyActive(company); }}
                         style={{ fontSize: 11, padding: "3px 8px" }}>
-                        {company.is_active ? "Desactivar" : "Activar"}
+                        {company.is_active ? t("admin.companyDeactivate") : t("admin.companyActivate")}
                       </Btn>
                     </div>
                   </div>
                 ))}
 
                 <div style={{ backgroundColor: T.bgSidebar, borderRadius: 16, border: `1px solid ${T.border}`, padding: 15, marginTop: 16, boxShadow: T.shadowSm }}>
-                  <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, color: T.text }}>Nueva empresa</p>
+                  <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, color: T.text }}>{t("admin.newCompanyTitle")}</p>
                   <input value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)}
-                    placeholder="Nombre de la empresa" style={{ ...inputStyle, width: "100%", marginBottom: 7 }} />
+                    placeholder={t("admin.companyNamePlaceholder")} style={{ ...inputStyle, width: "100%", marginBottom: 7 }} />
                   <input value={newCompanyEmail} onChange={e => setNewCompanyEmail(e.target.value)}
-                    placeholder="Email de contacto" style={{ ...inputStyle, width: "100%", marginBottom: 10 }} />
-                  <Btn variant="primary" onClick={handleCreateCompany}>Crear empresa</Btn>
+                    placeholder={t("admin.companyEmailPlaceholder")} style={{ ...inputStyle, width: "100%", marginBottom: 7 }} />
+                  <input value={newCompanyCode} onChange={e => setNewCompanyCode(e.target.value)}
+                    placeholder={t("admin.companyCodePlaceholder")} style={{ ...inputStyle, width: "100%", marginBottom: 10 }} />
+                  <Btn variant="primary" onClick={handleCreateCompany}>{t("admin.createCompany")}</Btn>
                   {!!newCompanyFeedback && (
                     <p style={{ margin: "8px 0 0", fontSize: 11, color: T.success }}>{newCompanyFeedback}</p>
                   )}
@@ -356,9 +372,9 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
 
               {selectedCompany && (
                 <div style={{ flex: 1, minWidth: 280 }}>
-                  <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: T.text }}>Configuracion</h2>
+                  <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.companySettingsTitle")}</h2>
                   <div style={{ backgroundColor: T.bgSidebar, borderRadius: 16, border: `1px solid ${T.border}`, padding: 14, boxShadow: T.shadowSm }}>
-                    <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>Retencion de logs (dias)</label>
+                    <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>{t("settings.logsRetentionDays")}</label>
                     <input
                       type="number"
                       min={1}
@@ -366,7 +382,7 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
                       onChange={e => handleUpdateCompanySettings({ log_retention_days: Math.max(1, parseInt(e.target.value) || 1) })}
                       style={{ ...inputStyle, width: "100%", margin: "6px 0 12px" }}
                     />
-                    <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>Retencion de backups</label>
+                    <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>{t("settings.backupRetention")}</label>
                     <input
                       type="number"
                       min={1}
@@ -380,7 +396,7 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
                         checked={companySettings?.backup_enabled ?? true}
                         onChange={e => handleUpdateCompanySettings({ backup_enabled: e.target.checked })}
                       />
-                      Backups automaticos activos
+                      {t("settings.backupEnabled")}
                     </label>
                   </div>
                 </div>
@@ -390,8 +406,8 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
 
           {section === "usuarios" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Usuarios de empresa</h2>
-              {!selectedCompany && <p style={{ color: T.textSoft }}>Selecciona una empresa.</p>}
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.companyUsersTitle")}</h2>
+              {!selectedCompany && <p style={{ color: T.textSoft }}>{t("admin.selectCompany")}</p>}
               {selectedCompany && (
                 <>
                   {members.map(m => (
@@ -405,15 +421,15 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
                   ))}
 
                   <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginTop: 14 }}>
-                    <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>Asignar usuario</p>
+                    <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>{t("admin.assignUserTitle")}</p>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <input value={memberEmail} onChange={e => setMemberEmail(e.target.value)} placeholder="email@empresa.com" style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
+                      <input value={memberEmail} onChange={e => setMemberEmail(e.target.value)} placeholder={t("settings.addMemberPlaceholder")} style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
                       <select value={memberRole} onChange={e => setMemberRole(e.target.value as CompanyRole)} style={{ ...inputStyle, width: "auto" }}>
                         {["company_admin", "project_manager", "member", "viewer"].map(role => (
                           <option key={role} value={role}>{role}</option>
                         ))}
                       </select>
-                      <Btn variant="primary" onClick={handleAddMember}>Asignar</Btn>
+                      <Btn variant="primary" onClick={handleAddMember}>{t("admin.assign")}</Btn>
                     </div>
                     {!!memberFeedback && <p style={{ margin: "7px 0 0", fontSize: 11, color: "#1D9E75" }}>{memberFeedback}</p>}
                   </div>
@@ -424,23 +440,23 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
 
           {section === "proyectos" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Proyectos</h2>
-              {!selectedCompany && <p style={{ color: T.textSoft }}>Selecciona una empresa.</p>}
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.projectsTitle")}</h2>
+              {!selectedCompany && <p style={{ color: T.textSoft }}>{t("admin.selectCompany")}</p>}
               {selectedCompany && (
                 <>
                   {projects.map(project => (
                     <div key={project.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>{project.name}</p>
-                      <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>Prefijo: {project.prefix}</p>
+                      <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>{t("admin.projectPrefixLabel", { prefix: project.prefix })}</p>
                     </div>
                   ))}
 
                   <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginTop: 12 }}>
-                    <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>Crear proyecto</p>
+                    <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>{t("admin.createProjectTitle")}</p>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <input value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Nombre" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
-                      <input value={projectPrefix} onChange={e => setProjectPrefix(e.target.value)} placeholder="PRJ" style={{ ...inputStyle, width: 80, textAlign: "center" }} />
-                      <Btn variant="primary" onClick={handleCreateProject}>Crear</Btn>
+                      <input value={projectName} onChange={e => setProjectName(e.target.value)} placeholder={t("admin.projectNamePlaceholder")} style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+                      <input value={projectPrefix} onChange={e => setProjectPrefix(e.target.value)} placeholder={t("admin.projectPrefixPlaceholder")} style={{ ...inputStyle, width: 80, textAlign: "center" }} />
+                      <Btn variant="primary" onClick={handleCreateProject}>{t("admin.createProject")}</Btn>
                     </div>
                     {!!projectFeedback && <p style={{ margin: "7px 0 0", fontSize: 11, color: "#1D9E75" }}>{projectFeedback}</p>}
                   </div>
@@ -451,11 +467,11 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
 
           {section === "tableros" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Tableros</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.boardsTitle")}</h2>
               {boards.map(board => (
                 <div key={board.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>{board.title}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>ID: {board.id}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>{t("admin.boardIdLabel", { id: board.id })}</p>
                 </div>
               ))}
             </div>
@@ -463,11 +479,11 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
 
           {section === "trabajos" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Trabajos (tarjetas)</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.cardsTitle")}</h2>
               {cards.map(card => (
                 <div key={card.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>{card.card_id} - {card.title}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>Board: {card.board_id}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>{t("admin.cardBoardLabel", { id: card.board_id })}</p>
                 </div>
               ))}
             </div>
@@ -475,22 +491,22 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
 
           {section === "mejoras" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Mejoras</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.improvementsTitle")}</h2>
               {improvements.map(imp => (
                 <div key={imp.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>{imp.description}</p>
                   <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>
-                    Estado: {imp.status} · 👍 {imp.vote_count || 0} · Usuario: {imp.user_name}
+                    {t("admin.improvementLine", { status: imp.status, votes: imp.vote_count || 0, user: imp.user_name })}
                   </p>
                   {selectedCompany && (
                     <p style={{ margin: "2px 0 0", fontSize: 10, color: T.textSoft }}>
-                      Empresa: {selectedCompany.name}
+                      {t("admin.companyLine", { name: selectedCompany.name })}
                     </p>
                   )}
                   {imp.status === "pending" && (
                     <div style={{ marginTop: 8 }}>
                       <Btn variant="primary" onClick={() => handleApproveImprovement(imp.id)} style={{ fontSize: 11, padding: "4px 10px" }}>
-                        Aprobar para IA
+                        {t("admin.approveForAi")}
                       </Btn>
                     </div>
                   )}
@@ -501,15 +517,15 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
 
           {section === "logs" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Logs</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.logsTitle")}</h2>
               {logs.map(log => (
                 <div key={log.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                   <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: T.text }}>{log.entity_type} · {log.change}</p>
                   <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>
-                    Empresa: {log.company_id} · User: {log.user_id} · Elemento: {log.entity_id}
+                    {t("admin.logLine", { company: log.company_id, user: log.user_id, entity: log.entity_id })}
                   </p>
                   <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>
-                    Board: {log.board_id} · {new Date(log.created_at).toLocaleString("es-ES")}
+                    {t("admin.logBoardLine", { board: log.board_id, date: new Date(log.created_at).toLocaleString(locale) })}
                   </p>
                 </div>
               ))}
@@ -518,13 +534,13 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
 
           {section === "backups" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Backups</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.backupsTitle")}</h2>
               {selectedCompany && (
                 <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginBottom: 16 }}>
-                  <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>Backup manual</p>
+                  <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>{t("settings.backupManualTitle")}</p>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <input value={backupSummary} onChange={e => setBackupSummary(e.target.value)} placeholder="Resumen" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
-                    <Btn variant="primary" onClick={handleCreateBackup}>Crear backup</Btn>
+                    <input value={backupSummary} onChange={e => setBackupSummary(e.target.value)} placeholder={t("settings.backupSummaryPlaceholder")} style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+                    <Btn variant="primary" onClick={handleCreateBackup}>{t("settings.backupCreate")}</Btn>
                   </div>
                   {!!backupFeedback && <p style={{ margin: "7px 0 0", fontSize: 11, color: "#1D9E75" }}>{backupFeedback}</p>}
                 </div>
@@ -533,7 +549,7 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
                 <div key={b.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                   <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: T.text }}>{b.summary}</p>
                   <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>
-                    {new Date(b.created_at).toLocaleString("es-ES")} · {b.created_by}
+                    {new Date(b.created_at).toLocaleString(locale)} · {b.created_by}
                   </p>
                 </div>
               ))}
@@ -542,7 +558,7 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
 
           {section === "funcionalidades" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Funcionalidades</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.featuresTitle")}</h2>
               {featureCatalog.map(feature => {
                 const override = selectedCompany ? companyFeatureMap.get(feature.key) : undefined;
                 const effective = feature.is_mandatory ? true : (override ?? feature.default_on);
@@ -554,18 +570,18 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
                         {feature.description && <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>{feature.description}</p>}
                       </div>
                       <label style={{ fontSize: 11, color: T.textSoft }}>
-                        Default
+                        {t("admin.featureDefault")}
                         <input type="checkbox" checked={feature.default_on}
                           onChange={e => handleCatalogUpdate(feature, "default_on", e.target.checked)} />
                       </label>
                       <label style={{ fontSize: 11, color: T.textSoft }}>
-                        Obligatoria
+                        {t("admin.featureMandatory")}
                         <input type="checkbox" checked={feature.is_mandatory}
                           onChange={e => handleCatalogUpdate(feature, "is_mandatory", e.target.checked)} />
                       </label>
                       {selectedCompany && !feature.is_mandatory && (
                         <label style={{ fontSize: 11, color: T.textSoft }}>
-                          Empresa
+                          {t("admin.featureCompany")}
                           <input type="checkbox" checked={!!effective}
                             onChange={e => handleCompanyFeatureToggle(feature.key, e.target.checked)} />
                         </label>
@@ -581,3 +597,4 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
     </div>
   );
 }
+

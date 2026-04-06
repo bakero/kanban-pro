@@ -1,11 +1,13 @@
-﻿import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
-import { FONT, PHASE_COLORS, SUPER_ADMIN_EMAIL } from "./constants";
+import { DOCS_URL, FONT, PHASE_COLORS, SUPER_ADMIN_EMAIL } from "./constants";
 import { ThemeContext, ThemeModeContext, resolveTheme, usePrefersDark } from "./hooks/useTheme";
 import type { ThemeMode } from "./hooks/useTheme";
 import {
   acceptPendingInvites,
+  createCard,
   ensureUserProfile,
   loadBoardData,
   loadBoardsForProject,
@@ -17,7 +19,9 @@ import {
   loadProjects,
   loadUserCompanies,
   loadWorkspaces,
+  resolveBoardByNumericId,
   resolveCompanyFeatureFlags,
+  resolveWorkspaceByNumericId,
   saveBoard,
   saveCard,
   saveColumn,
@@ -26,11 +30,11 @@ import {
   createCompanyBackup,
   saveCompanySettings,
   setCompanyFeature,
+  saveUserUiConfig,
 } from "./lib/db";
 import { supabase } from "./lib/supabase";
-import { daysSince, formatDur, genPrefix, histEntry, uid } from "./lib/utils";
+import { daysSince, formatDur, genPrefix, histEntry, uid, getUserFullName } from "./lib/utils";
 import { CardModal } from "./components/CardModal";
-import { ImprovementBtn } from "./components/ImprovementBtn";
 import { ImprovementsPage } from "./components/ImprovementsPage";
 import { JustifyModal } from "./components/JustifyModal";
 import { KCard } from "./components/KCard";
@@ -39,6 +43,10 @@ import { NewKanbanModal } from "./components/NewKanbanModal";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { SuperAdminPage } from "./components/admin/SuperAdminPage";
 import { CompanyAdminPage } from "./admin/CompanyAdminPage";
+import { PhaseLegend } from "./components/layout/PhaseLegend";
+import { SecondaryBar } from "./components/layout/SecondaryBar";
+import { SecondaryBarEditor } from "./components/layout/SecondaryBarEditor";
+import { UserProfilePanel } from "./components/UserProfilePanel";
 import type {
   Board,
   BoardColumn,
@@ -55,17 +63,37 @@ import type {
   User,
   Workspace,
 } from "./types";
-
+import { LangContext, translate, type Lang, type TranslationKey } from "./i18n";
 type AppPage = "board" | "settings" | "improvements" | "admin" | "company-admin";
 
 export default function App() {
   const prefersDark = usePrefersDark();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const basePath = location.pathname.startsWith("/app") ? "/app" : "";
+  const { boardNumericId, workspaceNumericId, openCardId, companyId, workspaceId, projectId, boardId, cardId } = useParams<{
+    boardNumericId?: string;
+    workspaceNumericId?: string;
+    openCardId?: string;
+    companyId?: string;
+    workspaceId?: string;
+    projectId?: string;
+    boardId?: string;
+    cardId?: string;
+  }>();
+
+  const [lang, setLang] = useState<Lang>("es");
+  const t = useMemo(
+    () => (key: TranslationKey, params?: Record<string, string | number>) => translate(key, lang, params),
+    [lang],
+  );
 
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authBusy, setAuthBusy] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const [companyLinks, setCompanyLinks] = useState<Array<{ company: Company; role: CompanyRole }>>([]);
   const [company, setCompany] = useState<Company | null>(null);
@@ -80,6 +108,13 @@ export default function App() {
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [routeTarget, setRouteTarget] = useState<{
+    companyId?: string | null;
+    workspaceId?: string | null;
+    projectId?: string | null;
+    boardId?: string | null;
+    openCardId?: string | null;
+  } | null>(null);
 
   const [boards, setBoards] = useState<Board[]>([]);
   const [columns, setColumns] = useState<BoardColumn[]>([]);
@@ -92,13 +127,19 @@ export default function App() {
   const [modal, setModal] = useState<Card | null>(null);
   const [justifyPending, setJustifyPending] = useState<{ cardId: string; colId: string; stateId: string; isDiscard?: boolean } | null>(null);
   const [showMetrics, setShowMetrics] = useState(true);
+  const [showFilters, setShowFilters] = useState(true);
   const [showNewKanban, setShowNewKanban] = useState(false);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const [secondaryOrder, setSecondaryOrder] = useState<string[]>([]);
+  const [secondaryEditorOpen, setSecondaryEditorOpen] = useState(false);
+  const [topMenuOpen, setTopMenuOpen] = useState(false);
 
   const dragCardId = useRef<string | null>(null);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [activeMobileColIdx, setActiveMobileColIdx] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const docsUrl = DOCS_URL;
 
   useEffect(() => {
     const update = () => setIsMobile(window.innerWidth < 768);
@@ -128,6 +169,29 @@ export default function App() {
     if (!userThemeKey) return;
     window.localStorage.setItem(userThemeKey, themeMode);
   }, [themeMode, userThemeKey]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("kanban-pro:lang:last");
+    if (stored === "en" || stored === "es") setLang(stored);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("kanban-pro:lang:last", lang);
+  }, [lang]);
+
+  useEffect(() => {
+    if (!currentUser?.lang) return;
+    setLang(currentUser.lang as Lang);
+  }, [currentUser?.lang]);
+
+  useEffect(() => {
+    const config = (currentUser?.ui_config as { secondaryBar?: string[] } | undefined)?.secondaryBar;
+    if (Array.isArray(config) && config.length) {
+      setSecondaryOrder(config);
+      return;
+    }
+    setSecondaryOrder(["newCard", "newBoard", "metrics", "filters", "wip", "improvements", "settings", "companyAdmin", "admin"]);
+  }, [currentUser?.id]);
 
   useEffect(() => {
     let mounted = true;
@@ -198,6 +262,83 @@ export default function App() {
   }, [session?.user?.id]);
 
   useEffect(() => {
+    if (!currentUser) return;
+    let cancelled = false;
+    const state = (location.state || {}) as Partial<{
+      companyId: string;
+      workspaceId: string;
+      projectId: string;
+    }>;
+
+    (async () => {
+      if (boardNumericId) {
+        const numeric = Number(boardNumericId);
+        if (!Number.isNaN(numeric)) {
+          const board = await resolveBoardByNumericId(numeric);
+          if (cancelled) return;
+          if (board) {
+            setRouteTarget({
+              companyId: board.company_id,
+              projectId: board.project_id,
+              boardId: board.id,
+              openCardId: openCardId || null,
+            });
+            return;
+          }
+        }
+      }
+
+      if (workspaceNumericId) {
+        const numeric = Number(workspaceNumericId);
+        if (!Number.isNaN(numeric)) {
+          const ws = await resolveWorkspaceByNumericId(numeric);
+          if (cancelled) return;
+          if (ws) {
+            setRouteTarget({
+              companyId: ws.company_id,
+              workspaceId: ws.id,
+            });
+            return;
+          }
+        }
+      }
+
+      if (companyId && projectId && boardId) {
+        let resolvedWorkspaceId = workspaceId || null;
+        if (!resolvedWorkspaceId) {
+          const { data: projectRow } = await supabase.from("projects").select("workspace_id").eq("id", projectId).maybeSingle();
+          resolvedWorkspaceId = (projectRow as { workspace_id?: string } | null)?.workspace_id || null;
+        }
+        if (cancelled) return;
+        setRouteTarget({
+          companyId,
+          workspaceId: resolvedWorkspaceId,
+          projectId,
+          boardId,
+          openCardId: cardId || null,
+        });
+        return;
+      }
+
+      if (state.companyId || state.workspaceId || state.projectId || openCardId) {
+        setRouteTarget({
+          companyId: state.companyId || null,
+          workspaceId: state.workspaceId || null,
+          projectId: state.projectId || null,
+          openCardId: openCardId || null,
+        });
+        return;
+      }
+
+      setRouteTarget(null);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, boardNumericId, workspaceNumericId, openCardId, companyId, workspaceId, projectId, boardId, cardId, location.state]);
+
+  useEffect(() => {
     if (!currentUser || !activeCompanyId) return;
     let cancelled = false;
     setLoading(true);
@@ -229,6 +370,15 @@ export default function App() {
   }, [activeCompanyId, currentUser?.id]);
 
   useEffect(() => {
+    if (!routeTarget?.workspaceId) return;
+    if (workspaces.length === 0) return;
+    if (routeTarget.workspaceId !== activeWorkspaceId) {
+      const exists = workspaces.some(w => w.id === routeTarget.workspaceId);
+      if (exists) setActiveWorkspaceId(routeTarget.workspaceId);
+    }
+  }, [routeTarget?.workspaceId, workspaces, activeWorkspaceId]);
+
+  useEffect(() => {
     if (!activeCompanyId) {
       setCompany(null);
       setCompanyRole("member");
@@ -238,6 +388,16 @@ export default function App() {
     setCompany(link?.company || null);
     setCompanyRole(link?.role || "member");
   }, [activeCompanyId, companyLinks]);
+
+  useEffect(() => {
+    if (!routeTarget?.companyId) return;
+    if (routeTarget.companyId !== activeCompanyId) {
+      setActiveCompanyId(routeTarget.companyId);
+      setActiveWorkspaceId(null);
+      setActiveProjectId(null);
+      setActiveBoardId(null);
+    }
+  }, [routeTarget?.companyId, activeCompanyId]);
 
   useEffect(() => {
     if (!activeWorkspaceId) {
@@ -260,6 +420,15 @@ export default function App() {
       cancelled = true;
     };
   }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    if (!routeTarget?.projectId) return;
+    if (projects.length === 0) return;
+    if (routeTarget.projectId !== activeProjectId) {
+      const exists = projects.some(p => p.id === routeTarget.projectId);
+      if (exists) setActiveProjectId(routeTarget.projectId);
+    }
+  }, [routeTarget?.projectId, projects, activeProjectId]);
 
   useEffect(() => {
     if (!currentUser || !activeProjectId) {
@@ -305,6 +474,15 @@ export default function App() {
   }, [activeProjectId, currentUser?.id]);
 
   useEffect(() => {
+    if (!routeTarget?.boardId) return;
+    if (boards.length === 0) return;
+    if (routeTarget.boardId !== activeBoardId) {
+      const exists = boards.some(b => b.id === routeTarget.boardId);
+      if (exists) setActiveBoardId(routeTarget.boardId);
+    }
+  }, [routeTarget?.boardId, boards, activeBoardId]);
+
+  useEffect(() => {
     if (!currentUser || !activeProjectId || !activeBoardId) return;
     let cancelled = false;
     setLoading(true);
@@ -326,6 +504,15 @@ export default function App() {
   }, [activeBoardId, activeProjectId, currentUser?.id]);
 
   useEffect(() => {
+    if (!routeTarget?.openCardId) return;
+    const card = cards.find(c => c.id === routeTarget.openCardId || c.card_id === routeTarget.openCardId);
+    if (card) {
+      setModal(card);
+      setRouteTarget(prev => (prev ? { ...prev, openCardId: null } : prev));
+    }
+  }, [routeTarget?.openCardId, cards]);
+
+  useEffect(() => {
     if (!activeBoardId) return;
     const ch = supabase.channel("cards-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "cards", filter: `board_id=eq.${activeBoardId}` }, payload => {
@@ -345,7 +532,20 @@ export default function App() {
     }
   }, [featureFlags.metrics]);
 
+  useEffect(() => {
+    if (!boardUrlId) return;
+    if (modal) return;
+    if (location.pathname !== boardUrl) {
+      navigate(boardUrl, { replace: true });
+    }
+  }, [boardUrlId, boardUrl, modal, navigate, location.pathname]);
+
   const board = boards.find(b => b.id === activeBoardId) || boards[0] || null;
+  const boardUrlId = board?.numeric_id ?? board?.id;
+  const hasHierarchy = !!(activeCompanyId && activeProjectId && activeBoardId);
+  const boardUrl = hasHierarchy
+    ? `${basePath}/${activeCompanyId}${activeWorkspaceId ? `/${activeWorkspaceId}` : ""}/${activeProjectId}/${activeBoardId}`
+    : (boardUrlId ? `${basePath}/board/${boardUrlId}` : `${basePath}/`);
   const activeProject = projects.find(p => p.id === activeProjectId) || null;
   const myProjectRole = projectMembers.find(m => m.user_id === currentUser?.id)?.role || "member";
   const discardStateIds = new Set(states.filter(s => s.is_discard).map(s => s.id));
@@ -363,11 +563,12 @@ export default function App() {
   const avgCycle = cycleTimes.length ? cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length : 0;
   const throughput = completedCards.filter(c => new Date(c.completed_at!).getTime() >= Date.now() - 7 * 24 * 3600000).length;
   const wipTotal = cards.filter(c => wipCols.some(w => w.id === c.col_id) && !discardStateIds.has(c.state_id)).length;
+  const wipLimitTotal = wipCols.reduce((acc, col) => acc + (col.wip_limit || 0), 0);
 
   const metricDefs = [
-    { label: "Lead time medio", value: formatDur(avgLead), color: T.accent, hint: leadTimes.length ? `${leadTimes.length} completadas` : "Sin datos" },
-    { label: "Cycle time medio", value: formatDur(avgCycle), color: T.warning, hint: wipCols.map(c => c.name).join(", ") || "Sin WIP" },
-    { label: "Throughput", value: String(throughput), color: T.success, hint: "Ãšltimos 7 dÃ­as" },
+    { label: t("metrics.leadTime"), value: formatDur(avgLead), color: T.accent, hint: leadTimes.length ? t("metrics.completedCount", { count: leadTimes.length }) : t("metrics.noData") },
+    { label: t("metrics.cycleTime"), value: formatDur(avgCycle), color: T.warning, hint: wipCols.map(c => c.name).join(", ") || t("metrics.noWip") },
+    { label: t("metrics.throughput"), value: String(throughput), color: T.success, hint: t("metrics.last7Days") },
   ];
 
   const burnSeries = (() => {
@@ -415,10 +616,31 @@ export default function App() {
   }
 
   const filters = [
-    { id: "mine", label: "Mis tareas", fn: (c: Card) => c.creator_id === currentUser?.id },
-    { id: "recent", label: "Act. 24h", fn: (c: Card) => { const l = c.history[c.history.length - 1]; try { return l && (Date.now() - new Date(l.ts).getTime()) < 86400000; } catch { return false; } } },
-    { id: "blocked", label: "Bloqueadas", fn: (c: Card) => c.blocked },
-    { id: "overdue", label: "Entrega pasada", fn: (c: Card) => !!c.due_date && new Date(c.due_date) < new Date() },
+    { id: "mine", label: t("filters.mine"), fn: (c: Card) => c.creator_id === currentUser?.id },
+    { id: "recent", label: t("filters.last24h"), fn: (c: Card) => { const l = c.history[c.history.length - 1]; try { return l && (Date.now() - new Date(l.ts).getTime()) < 86400000; } catch { return false; } } },
+    { id: "blocked", label: t("filters.blocked"), fn: (c: Card) => c.blocked },
+    { id: "overdue", label: t("filters.overdue"), fn: (c: Card) => !!c.due_date && new Date(c.due_date) < new Date() },
+  ];
+
+  const secondaryActions = page === "board" ? [
+    { id: "newCard", label: t("menu.newCard"), onClick: () => { void newCard(); } },
+    { id: "newBoard", label: t("menu.newBoard"), onClick: () => setShowNewKanban(true) },
+    ...(featureFlags.metrics ? [{ id: "metrics", label: t("menu.metrics"), onClick: () => setShowMetrics(v => !v), active: showMetrics }] : []),
+    ...(featureFlags.filters ? [{ id: "filters", label: t("filters.toggle"), onClick: () => setShowFilters(v => !v), active: showFilters }] : []),
+    ...(featureFlags.wip && wipCols.length > 0 ? [{ id: "wip", label: t("board.wip", { current: wipTotal, limit: wipLimitTotal || t("board.wipUnlimited") }), disabled: true }] : []),
+    ...(featureFlags.improvements ? [{ id: "improvements", label: t("menu.improvements"), onClick: () => setPage("improvements"), active: page === "improvements" }] : []),
+    { id: "settings", label: t("menu.settings"), onClick: () => setPage("settings"), active: page === "settings" },
+    ...(featureFlags.company_admin_console && companyRole === "company_admin" ? [{ id: "companyAdmin", label: t("menu.companyAdmin"), onClick: () => setPage("company-admin") }] : []),
+    ...(isSuperAdmin ? [{ id: "admin", label: t("menu.admin"), onClick: () => setPage("admin") }] : []),
+  ] : [];
+
+  const topMenuActions = [
+    ...(featureFlags.improvements ? [{ id: "improvements", label: t("menu.improvements"), onClick: () => setPage("improvements") }] : []),
+    { id: "settings", label: t("menu.settings"), onClick: () => setPage("settings") },
+    ...(featureFlags.company_admin_console && companyRole === "company_admin" ? [{ id: "companyAdmin", label: t("menu.companyAdmin"), onClick: () => setPage("company-admin") }] : []),
+    ...(isSuperAdmin ? [{ id: "admin", label: t("menu.admin"), onClick: () => setPage("admin") }] : []),
+    { id: "docs", label: t("menu.docs"), onClick: () => window.open(docsUrl, "_blank", "noopener,noreferrer") },
+    { id: "logout", label: t("menu.logout"), onClick: handleLogout },
   ];
 
   function cardVisible(c: Card) {
@@ -433,6 +655,9 @@ export default function App() {
 
   function openCard(id: string) {
     setModal(cards.find(c => c.id === id) || null);
+    if (boardUrlId) {
+      navigate(hasHierarchy ? `${boardUrl}/${id}` : `${boardUrl}/card/${id}`, { replace: true });
+    }
   }
 
   async function onSaveCard(updated: Card) {
@@ -446,33 +671,31 @@ export default function App() {
     }
     setCards(cs => cs.map(c => c.id === updated.id ? updated : c));
     setModal(null);
+    if (boardUrlId) navigate(boardUrl, { replace: true });
     await saveCard(updated, currentUser.id);
   }
 
   async function newCard() {
-    if (!board || !columns.length || !currentUser) return;
-    const seq = board.card_seq;
-    const updatedBoard = { ...board, card_seq: seq + 1 };
-    setBoards(bs => bs.map(b => b.id === board.id ? updatedBoard : b));
-    await saveBoard(updatedBoard, currentUser.id);
+    if (!board || !columns.length || !currentUser || !activeProject) return;
     const firstCol = columns[0];
     const firstState = states.find(s => (firstCol?.state_ids || []).includes(s.id)) || states[0];
+    const tmpId = `${activeProject.prefix.toUpperCase()}-${Date.now()}`;
     const c: Card = {
       id: uid(),
-      card_id: `${board.prefix}-${String(seq).padStart(3, "0")}`,
+      card_id: tmpId,
       board_id: board.id,
       col_id: firstCol?.id,
       state_id: firstState?.id,
-      title: "Nueva tarjeta",
+      title: t("card.defaultTitle"),
       type: "tarea",
-      category: board.categories[0] || "General",
+      category: board.categories[0] || t("card.defaultCategory"),
       due_date: "",
       blocked: false,
       creator_id: currentUser.id,
       description: "",
       attachments: [],
       comments: [],
-      history: [histEntry("Tarjeta creada", currentUser)],
+      history: [histEntry(t("history.cardCreated"), currentUser, lang)],
       depends_on: [],
       blocked_by: [],
       time_per_col: {},
@@ -481,9 +704,18 @@ export default function App() {
       completed_at: null,
       discarded_at: null,
     };
-    setCards(cs => [c, ...cs]);
-    setModal(c);
-    await saveCard(c, currentUser.id);
+    const created = await createCard(c, activeProject.prefix, currentUser.id);
+    setCards(cs => [created, ...cs]);
+    setModal(created);
+  }
+
+  async function handleSaveSecondaryBar(nextOrder: string[]) {
+    if (!currentUser) return;
+    const nextConfig = { ...(currentUser.ui_config || {}), secondaryBar: nextOrder };
+    setSecondaryOrder(nextOrder);
+    setSecondaryEditorOpen(false);
+    setCurrentUser({ ...currentUser, ui_config: nextConfig });
+    await saveUserUiConfig(currentUser.id, nextConfig);
   }
 
   function onDragStart(e: React.DragEvent, id: string) {
@@ -529,8 +761,12 @@ export default function App() {
     const tpc = { ...card.time_per_col };
     tpc[card.col_id] = (tpc[card.col_id] || 0) + elapsed;
     const hist = [...card.history];
-    if (reason) hist.push(histEntry(`JustificaciÃ³n: ${reason}`, currentUser));
-    hist.push(histEntry(`Movida a "${columns.find(c => c.id === colId)?.name}" (${newState?.name})`, currentUser));
+    if (reason) hist.push(histEntry(t("history.justification", { reason }), currentUser, lang));
+    hist.push(histEntry(
+      t("history.movedTo", { column: columns.find(c => c.id === colId)?.name || "", state: newState?.name || "" }),
+      currentUser,
+      lang,
+    ));
     const isDone = newState?.phase === "post" && !newState?.is_discard;
     const isDiscard = !!newState?.is_discard;
     const updated: Card = {
@@ -550,16 +786,18 @@ export default function App() {
 
   async function createBoard(title: string, mode: string) {
     if (!currentUser || !company || !activeProjectId) return;
+    const isEn = lang === "en";
     const prefix = genPrefix(title);
     const id = uid();
+    const boardOwner = activeProject?.owner_id || currentUser.id;
     const nb = {
       id,
       company_id: company.id,
       project_id: activeProjectId,
       title,
       prefix,
-      card_seq: 1,
-      owner_user_id: currentUser.id,
+      card_seq: 0,
+      owner_user_id: boardOwner,
       board_config: { public: false, requireLogin: true, hideDoneAfterDays: 0 },
       visible_fields: [],
       categories: mode === "copy" ? [...(board?.categories || [])] : ["Frontend", "Backend"],
@@ -569,16 +807,16 @@ export default function App() {
     const newCols: BoardColumn[] = mode === "copy"
       ? columns.map(c => ({ ...c, id: uid(), board_id: id }))
       : [
-          { id: uid(), board_id: id, name: "Por hacer", phase: "pre", state_ids: [], wip_limit: 0, is_wip: false, sort_order: 0 },
-          { id: uid(), board_id: id, name: "En progreso", phase: "work", state_ids: [], wip_limit: 3, is_wip: true, sort_order: 1 },
-          { id: uid(), board_id: id, name: "Hecho", phase: "post", state_ids: [], wip_limit: 0, is_wip: false, sort_order: 2 },
+          { id: uid(), board_id: id, name: isEn ? "To do" : "Por hacer", phase: "pre", state_ids: [], wip_limit: 0, is_wip: false, sort_order: 0 },
+          { id: uid(), board_id: id, name: isEn ? "In progress" : "En progreso", phase: "work", state_ids: [], wip_limit: 3, is_wip: true, sort_order: 1 },
+          { id: uid(), board_id: id, name: isEn ? "Done" : "Hecho", phase: "post", state_ids: [], wip_limit: 0, is_wip: false, sort_order: 2 },
         ];
     const newStates: BoardState[] = mode === "copy"
       ? states.map(s => ({ ...s, id: uid(), board_id: id }))
       : [
-          { id: uid(), board_id: id, name: "Pendiente", phase: "pre", is_discard: false, sort_order: 0 },
-          { id: uid(), board_id: id, name: "En curso", phase: "work", is_discard: false, sort_order: 1 },
-          { id: uid(), board_id: id, name: "Completado", phase: "post", is_discard: false, sort_order: 2 },
+          { id: uid(), board_id: id, name: isEn ? "Pending" : "Pendiente", phase: "pre", is_discard: false, sort_order: 0 },
+          { id: uid(), board_id: id, name: isEn ? "In progress" : "En curso", phase: "work", is_discard: false, sort_order: 1 },
+          { id: uid(), board_id: id, name: isEn ? "Done" : "Completado", phase: "post", is_discard: false, sort_order: 2 },
         ];
     await saveBoard(nb, currentUser.id);
     await Promise.all(newCols.map(col => saveColumn(col, currentUser.id)));
@@ -617,7 +855,9 @@ export default function App() {
     return (
       <ThemeModeContext.Provider value={{ mode: themeMode, setMode: setThemeMode }}>
         <ThemeContext.Provider value={T}>
-          {content}
+          <LangContext.Provider value={{ lang, setLang }}>
+            {content}
+          </LangContext.Provider>
         </ThemeContext.Provider>
       </ThemeModeContext.Provider>
     );
@@ -626,7 +866,7 @@ export default function App() {
   if (authLoading) {
     return withTheme(
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: T.bg, color: T.text, fontFamily: FONT }}>
-        Preparando acceso...
+        {t("app.preparingAccess")}
       </div>,
     );
   }
@@ -640,7 +880,7 @@ export default function App() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: T.bg, fontFamily: FONT }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 16, color: T.accent }}>[]</div>
-          <p style={{ fontSize: 15, fontWeight: 600, color: T.textSoft, margin: 0 }}>Cargando Kanban Pro...</p>
+          <p style={{ fontSize: 15, fontWeight: 600, color: T.textSoft, margin: 0 }}>{t("app.loadingApp")}</p>
         </div>
       </div>,
     );
@@ -673,12 +913,12 @@ export default function App() {
               onClick={() => setPage("admin")}
               style={{ fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 12, border: `1px solid ${T.accent}`, backgroundColor: T.accentSoft, color: T.accent, cursor: "pointer" }}
             >
-              â—ˆ Abrir consola de administraciÃ³n
+              {t("menu.openAdminConsole")}
             </button>
           </div>
         )}
-        <p style={{ color: T.text, fontWeight: 700 }}>No tienes una empresa asignada.</p>
-        <p style={{ color: T.textSoft, fontSize: 13 }}>Contacta con el administrador para recibir acceso.</p>
+        <p style={{ color: T.text, fontWeight: 700 }}>{t("app.noCompanyTitle")}</p>
+        <p style={{ color: T.textSoft, fontSize: 13 }}>{t("app.noCompanyBody")}</p>
       </div>,
     );
   }
@@ -731,10 +971,10 @@ export default function App() {
   if (!board || !currentUser || !activeProject) {
     return withTheme(
       <div style={{ minHeight: "100vh", background: T.bgSoft, padding: 24, fontFamily: FONT }}>
-        <p style={{ color: T.text, fontWeight: 700 }}>No hay tableros accesibles.</p>
+        <p style={{ color: T.text, fontWeight: 700 }}>{t("app.noBoards")}</p>
         {!activeProject && (
           <p style={{ color: T.textSoft, fontSize: 13 }}>
-            Pide al administrador que cree un proyecto para tu empresa.
+            {t("app.noProjectsBody")}
           </p>
         )}
       </div>,
@@ -744,7 +984,7 @@ export default function App() {
   return withTheme(
     <div style={{ fontFamily: FONT, backgroundColor: T.bg, height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", color: T.text }}>
 
-      {/* â”€â”€ Modals â”€â”€ */}
+      {/* Modals */}
       {modal && (
         <CardModal
           card={modal}
@@ -758,7 +998,10 @@ export default function App() {
           featureFlags={featureFlags}
           allCards={cards}
           categories={board.categories}
-          onClose={() => setModal(null)}
+          onClose={() => {
+            setModal(null);
+            if (boardUrlId) navigate(boardUrl, { replace: true });
+          }}
           onSave={onSaveCard}
           onSaveCat={onSaveCat}
           onOpenCard={openCard}
@@ -767,27 +1010,53 @@ export default function App() {
       {justifyPending && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: T.overlay, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 900, padding: 20 }}>
           <JustifyModal
-            title={justifyPending.isDiscard ? "Descartar tarea" : "Reabrir tarea"}
+            title={justifyPending.isDiscard ? t("justify.titleDiscard") : t("justify.titleReopen")}
             onConfirm={r => applyDrop(justifyPending.cardId, justifyPending.colId, justifyPending.stateId, r)}
             onCancel={() => setJustifyPending(null)}
           />
         </div>
       )}
       {showNewKanban && <NewKanbanModal onClose={() => setShowNewKanban(false)} onCreate={createBoard} />}
+      <SecondaryBarEditor
+        isOpen={secondaryEditorOpen}
+        actions={secondaryActions.map(action => ({ id: action.id, label: action.label }))}
+        order={secondaryOrder}
+        onSave={handleSaveSecondaryBar}
+        onClose={() => setSecondaryEditorOpen(false)}
+      />
+      {currentUser && (
+        <UserProfilePanel
+          user={currentUser}
+          isOpen={profileOpen}
+          isMobile={isMobile}
+          onClose={() => setProfileOpen(false)}
+          onSaved={updated => {
+            setCurrentUser(updated);
+            if (updated.lang) setLang(updated.lang as Lang);
+            setProfileOpen(false);
+          }}
+        />
+      )}
 
-      {/* â”€â”€ Mobile slide-out menu â”€â”€ */}
+      {/* Mobile slide-out menu */}
       {isMobile && mobileMenuOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.overlay }} onClick={() => setMobileMenuOpen(false)}>
           <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 280, background: T.bg, borderLeft: `1px solid ${T.border}`, display: "flex", flexDirection: "column" }}
                onClick={e => e.stopPropagation()}>
             <div style={{ padding: "20px 20px 14px", borderBottom: `1px solid ${T.border}` }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 4 }}>Kanban Pro</div>
-              <div style={{ fontSize: 12, color: T.textSoft }}>{currentUser.name}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 4 }}>{t("app.brand")}</div>
+              <button
+                onClick={() => { setProfileOpen(true); setMobileMenuOpen(false); }}
+                style={{ fontSize: 12, color: T.textSoft, border: "none", background: "transparent", cursor: "pointer", padding: 0 }}
+                title={getUserFullName(currentUser) || currentUser.name}
+              >
+                {getUserFullName(currentUser) || currentUser.name}
+              </button>
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
               {companyLinks.length > 1 && (
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>EMPRESA</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>{t("menu.company").toUpperCase()}</div>
                   <select value={activeCompanyId || ""} onChange={e => { const v = e.target.value; setActiveCompanyId(v); setActiveWorkspaceId(null); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); setMobileMenuOpen(false); }}
                     style={{ width: "100%", fontSize: 13, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
                     {companyLinks.map(c => <option key={c.company.id} value={c.company.id}>{c.company.name}</option>)}
@@ -796,7 +1065,7 @@ export default function App() {
               )}
               {featureFlags.workspaces && workspaces.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>ESPACIO</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>{t("menu.workspace").toUpperCase()}</div>
                   <select value={activeWorkspaceId || ""} onChange={e => { const v = e.target.value; setActiveWorkspaceId(v); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); setMobileMenuOpen(false); }}
                     style={{ width: "100%", fontSize: 13, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
                     {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -805,7 +1074,7 @@ export default function App() {
               )}
               {projects.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>PROYECTO</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>{t("menu.project").toUpperCase()}</div>
                   <select value={activeProjectId || ""} onChange={e => { const v = e.target.value; setActiveProjectId(v); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); setMobileMenuOpen(false); }}
                     style={{ width: "100%", fontSize: 13, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -813,70 +1082,48 @@ export default function App() {
                 </div>
               )}
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>TEMA</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>{t("menu.theme").toUpperCase()}</div>
                 <select value={themeMode} onChange={e => setThemeMode(e.target.value as ThemeMode)}
                   style={{ width: "100%", fontSize: 13, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
-                  <option value="system">Sistema</option>
-                  <option value="light">Claro</option>
-                  <option value="dark">Oscuro</option>
+                  <option value="system">{t("theme.system")}</option>
+                  <option value="light">{t("theme.light")}</option>
+                  <option value="dark">{t("theme.dark")}</option>
                 </select>
               </div>
               <div style={{ height: 1, background: T.border }} />
-              {featureFlags.metrics && (
-                <button onClick={() => { setShowMetrics(v => !v); setMobileMenuOpen(false); }}
-                  style={{ textAlign: "left", fontSize: 13, fontWeight: 600, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
-                  {showMetrics ? "â–¼" : "â–¶"} MÃ©tricas
+              {topMenuActions.map(action => (
+                <button
+                  key={action.id}
+                  onClick={() => { action.onClick(); setMobileMenuOpen(false); }}
+                  style={{ textAlign: "left", fontSize: 13, fontWeight: 600, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}
+                >
+                  {action.label}
                 </button>
-              )}
-                {featureFlags.improvements && (
-                  <button onClick={() => { setPage("improvements"); setMobileMenuOpen(false); }}
-                    style={{ textAlign: "left", fontSize: 13, fontWeight: 600, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
-                    ðŸ’¡ Mejoras
-                  </button>
-                )}
-                {featureFlags.company_admin_console && companyRole === "company_admin" && (
-                  <button onClick={() => { setPage("company-admin"); setMobileMenuOpen(false); }}
-                    style={{ textAlign: "left", fontSize: 13, fontWeight: 700, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
-                    Admin empresa
-                  </button>
-                )}
-                {isSuperAdmin && (
-                <button onClick={() => { setPage("admin"); setMobileMenuOpen(false); }}
-                  style={{ textAlign: "left", fontSize: 13, fontWeight: 700, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.accent}`, backgroundColor: T.accentSoft, color: T.accent, cursor: "pointer" }}>
-                  â—ˆ Admin
-                </button>
-              )}
-              <button onClick={() => { setPage("settings"); setMobileMenuOpen(false); }}
-                style={{ textAlign: "left", fontSize: 13, fontWeight: 600, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
-                âš™ ConfiguraciÃ³n
-              </button>
+              ))}
               <button onClick={() => { setShowNewKanban(true); setMobileMenuOpen(false); }}
                 style={{ textAlign: "left", fontSize: 13, fontWeight: 600, padding: "10px 12px", borderRadius: 10, border: `1px dashed ${T.borderStrong}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
-                + Nuevo tablero
-              </button>
-            </div>
-            <div style={{ padding: "12px 16px", borderTop: `1px solid ${T.border}` }}>
-              <button onClick={handleLogout}
-                style={{ width: "100%", fontSize: 13, fontWeight: 700, padding: "12px", borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.danger, cursor: "pointer" }}>
-                Salir
+                {t("menu.newBoard")}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* â”€â”€ HEADER â”€â”€ */}
+      {/* Header */}
       {isMobile ? (
         <div style={{ flexShrink: 0, backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, backdropFilter: "blur(18px)" }}>
           <div style={{ display: "flex", alignItems: "center", padding: "12px 16px 8px", gap: 10 }}>
-            <span style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: -0.5, flex: 1 }}>Kanban Pro</span>
-            <span style={{ fontSize: 11, color: T.textSoft, maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.name}</span>
-            {featureFlags.improvements && (
-              <ImprovementBtn companyId={company?.id || ""} boardId={activeBoardId || ""} userId={currentUser.id} userName={currentUser.name} context="board" />
-            )}
+            <span style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: -0.5, flex: 1 }}>{t("app.brand")}</span>
+            <button
+              onClick={() => setProfileOpen(true)}
+              style={{ fontSize: 11, color: T.textSoft, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", border: "none", background: "transparent", cursor: "pointer" }}
+              title={getUserFullName(currentUser) || currentUser.name}
+            >
+              {getUserFullName(currentUser) || currentUser.name}
+            </button>
             <button onClick={() => setMobileMenuOpen(true)}
               style={{ fontSize: 16, lineHeight: 1, padding: "7px 11px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
-              â˜°
+              ≡
             </button>
           </div>
           <div style={{ display: "flex", alignItems: "center", padding: "0 16px 10px", gap: 8 }}>
@@ -884,10 +1131,6 @@ export default function App() {
               style={{ flex: 1, fontSize: 13, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
               {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
             </select>
-            <button onClick={newCard}
-              style={{ flexShrink: 0, fontSize: 13, fontWeight: 800, padding: "10px 16px", borderRadius: 12, border: "none", backgroundColor: T.accent, color: "#fff", cursor: "pointer", boxShadow: T.shadowSm }}>
-              + Tarjeta
-            </button>
           </div>
           {/* Column tabs */}
           <div style={{ display: "flex", padding: "0 12px", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
@@ -908,90 +1151,85 @@ export default function App() {
       ) : (
         <div style={{ flexShrink: 0, padding: "10px 16px", backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, backdropFilter: "blur(18px)", boxShadow: T.shadowSm }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 16, fontWeight: 800, color: T.text, letterSpacing: -0.5, marginRight: 4 }}>Kanban Pro</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: T.text, letterSpacing: -0.5, marginRight: 4 }}>{t("app.brand")}</span>
             {companyLinks.length > 1 && (
-              <select value={activeCompanyId || ""} onChange={e => { const v = e.target.value; setActiveCompanyId(v); setActiveWorkspaceId(null); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
-                style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
-                {companyLinks.map(c => <option key={c.company.id} value={c.company.id}>{c.company.name}</option>)}
-              </select>
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: T.textSoft, marginBottom: 4, letterSpacing: 0.6 }}>{t("menu.company").toUpperCase()}</div>
+                <select value={activeCompanyId || ""} onChange={e => { const v = e.target.value; setActiveCompanyId(v); setActiveWorkspaceId(null); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
+                  style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
+                  {companyLinks.map(c => <option key={c.company.id} value={c.company.id}>{c.company.name}</option>)}
+                </select>
+              </div>
             )}
             {featureFlags.workspaces && workspaces.length > 0 && (
-              <select value={activeWorkspaceId || ""} onChange={e => { const v = e.target.value; setActiveWorkspaceId(v); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
-                style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
-                {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: T.textSoft, marginBottom: 4, letterSpacing: 0.6 }}>{t("menu.workspace").toUpperCase()}</div>
+                <select value={activeWorkspaceId || ""} onChange={e => { const v = e.target.value; setActiveWorkspaceId(v); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
+                  style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
+                  {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
             )}
             {projects.length > 0 && (
-              <select value={activeProjectId || ""} onChange={e => { const v = e.target.value; setActiveProjectId(v); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
-                style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: T.textSoft, marginBottom: 4, letterSpacing: 0.6 }}>{t("menu.project").toUpperCase()}</div>
+                <select value={activeProjectId || ""} onChange={e => { const v = e.target.value; setActiveProjectId(v); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
+                  style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: T.textSoft, marginBottom: 4, letterSpacing: 0.6 }}>{t("menu.board").toUpperCase()}</div>
+              <select value={activeBoardId || ""} onChange={e => setActiveBoardId(e.target.value)}
+                style={{ fontSize: 11, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
+                {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
               </select>
-            )}
-            <select value={activeBoardId || ""} onChange={e => setActiveBoardId(e.target.value)}
-              style={{ fontSize: 11, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
-              {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
-            </select>
-            <button onClick={() => setShowNewKanban(true)}
-              style={{ fontSize: 11, fontWeight: 600, padding: "7px 9px", borderRadius: 9, border: `1px dashed ${T.borderStrong}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
-              + Tablero
-            </button>
+            </div>
             <div style={{ flex: 1 }} />
-            <span style={{ fontSize: 11, color: T.textSoft }}>{currentUser.name}</span>
-            {featureFlags.wip && wipCols.length > 0 && (
-              <span style={{ fontSize: 11, fontWeight: 700, color: wipTotal > 0 ? T.warning : T.textSoft, background: T.bgElevated, borderRadius: 999, padding: "5px 10px", border: `1px solid ${T.border}` }}>
-                WIP {wipTotal}/{wipCols.reduce((a, c) => a + (c.wip_limit || 0), 0) || "âˆž"}
-              </span>
-            )}
-            {featureFlags.metrics && (
-              <button onClick={() => setShowMetrics(v => !v)}
-                style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${showMetrics ? T.accent : T.border}`, backgroundColor: showMetrics ? T.accentSoft : "transparent", color: showMetrics ? T.accent : T.textSoft, cursor: "pointer" }}>
-                MÃ©tricas
-              </button>
-            )}
-              {featureFlags.improvements && (
-                <button onClick={() => setPage("improvements")}
-                  style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
-                  Mejoras
-                </button>
-              )}
-              {featureFlags.company_admin_console && companyRole === "company_admin" && (
-                <button onClick={() => setPage("company-admin")}
-                  style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
-                  Admin empresa
-                </button>
-              )}
-              {isSuperAdmin && (
-              <button onClick={() => setPage("admin")}
-                style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.accent}`, backgroundColor: T.accentSoft, color: T.accent, cursor: "pointer" }}>
-                â—ˆ Admin
-              </button>
-            )}
-            <button onClick={() => setPage("settings")}
-              style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
-              âš™ Config.
+            <button
+              onClick={() => setProfileOpen(true)}
+              style={{ fontSize: 11, color: T.textSoft, border: "none", background: "transparent", cursor: "pointer" }}
+              title={getUserFullName(currentUser) || currentUser.name}
+            >
+              {getUserFullName(currentUser) || currentUser.name}
             </button>
             <select value={themeMode} onChange={e => setThemeMode(e.target.value as ThemeMode)}
               style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
-              <option value="system">ðŸŒ“</option>
-              <option value="light">â˜€</option>
-              <option value="dark">ðŸŒ™</option>
+              <option value="system">{t("theme.system")}</option>
+              <option value="light">{t("theme.light")}</option>
+              <option value="dark">{t("theme.dark")}</option>
             </select>
-            {featureFlags.improvements && (
-              <ImprovementBtn companyId={company?.id || ""} boardId={activeBoardId || ""} userId={currentUser.id} userName={currentUser.name} context="board" />
-            )}
-            <button onClick={newCard}
-              style={{ fontSize: 12, fontWeight: 800, padding: "8px 16px", borderRadius: 10, border: "none", backgroundColor: T.accent, color: "#fff", cursor: "pointer", boxShadow: T.shadowSm }}>
-              + Tarjeta
-            </button>
-            <button onClick={handleLogout}
-              style={{ fontSize: 11, fontWeight: 600, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
-              Salir
-            </button>
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setTopMenuOpen(v => !v)}
+                style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}
+              >
+                {t("menu.menu")}
+              </button>
+              {topMenuOpen && (
+                <div style={{ position: "absolute", right: 0, top: "110%", minWidth: 180, background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 12, boxShadow: T.shadowMd, padding: 8, zIndex: 50 }}>
+                  {topMenuActions.map(action => (
+                    <button
+                      key={action.id}
+                      onClick={() => { action.onClick(); setTopMenuOpen(false); }}
+                      style={{ width: "100%", textAlign: "left", fontSize: 12, fontWeight: 600, padding: "8px 10px", borderRadius: 8, border: "none", background: "transparent", color: T.text, cursor: "pointer" }}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* â”€â”€ Sub-header: metrics Â· filters â”€â”€ */}
+      {page === "board" && secondaryActions.length > 0 && (
+        <SecondaryBar actions={secondaryActions} order={secondaryOrder} onEdit={() => setSecondaryEditorOpen(true)} />
+      )}
+
+      {/* Sub-header: metrics · filters */}
       <div style={{ flexShrink: 0 }}>
         {featureFlags.metrics && showMetrics && (
           <div style={{ padding: "8px 16px", display: "flex", gap: 10, overflowX: "auto", scrollbarWidth: "none" }}>
@@ -1004,7 +1242,7 @@ export default function App() {
             ))}
             {(featureFlags.metrics_burnup || featureFlags.metrics_burndown) && (
               <div style={{ backgroundColor: T.bgElevated, borderRadius: 14, border: `1px solid ${T.border}`, padding: "10px 14px", minWidth: isMobile ? 180 : 220, flexShrink: 0, boxShadow: T.shadowSm }}>
-                <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: T.textSoft }}>MÃ©tricas avanzadas</p>
+                <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: T.textSoft }}>{t("board.advancedMetrics")}</p>
                 <svg width={isMobile ? 160 : 200} height={60} style={{ display: "block" }}>
                   {featureFlags.metrics_burnup && (
                     <path d={seriesPath(burnSeries.createdSeries, isMobile ? 160 : 200, 50)} stroke={T.warning} strokeWidth="2" fill="none" />
@@ -1014,18 +1252,18 @@ export default function App() {
                   )}
                 </svg>
                 <div style={{ display: "flex", gap: 8, fontSize: 9, color: T.textSoft }}>
-                  {featureFlags.metrics_burnup && <span>Burnup</span>}
-                  {featureFlags.metrics_burndown && <span>Burndown</span>}
+                  {featureFlags.metrics_burnup && <span>{t("metrics.burnup")}</span>}
+                  {featureFlags.metrics_burndown && <span>{t("metrics.burndown")}</span>}
                 </div>
               </div>
             )}
           </div>
         )}
-        {featureFlags.filters && (
+        {featureFlags.filters && showFilters && (
           <div style={{ margin: "0 16px 8px", padding: "8px 12px", display: "flex", gap: 6, alignItems: "center", border: `1px solid ${T.border}`, borderRadius: 14, backgroundColor: T.bgSidebar, flexWrap: "wrap", backdropFilter: "blur(14px)" }}>
             {!isMobile && (["pre", "work", "post"] as const).map(phase => (
               <span key={phase} style={{ fontSize: 10, fontWeight: 700, color: PHASE_COLORS[phase], padding: "3px 8px", borderRadius: 999, background: `${PHASE_COLORS[phase]}14`, border: `1px solid ${PHASE_COLORS[phase]}40` }}>
-                {phase === "pre" ? "Pre" : phase === "work" ? "En curso" : "Post"}
+                {phase === "pre" ? t("filters.pre") : phase === "work" ? t("filters.work") : t("filters.post")}
               </span>
             ))}
             {!isMobile && <div style={{ width: 1, height: 14, background: T.border }} />}
@@ -1041,14 +1279,14 @@ export default function App() {
             {activeFilters.length > 0 && (
               <button onClick={() => setActiveFilters([])}
                 style={{ fontSize: 11, fontWeight: 700, padding: "5px 8px", borderRadius: 999, border: "none", backgroundColor: "transparent", color: T.danger, cursor: "pointer" }}>
-                âœ•
+                ×
               </button>
             )}
           </div>
         )}
       </div>
 
-      {/* â”€â”€ Board area â”€â”€ */}
+      {/* Board area */}
       {isMobile ? (
         (() => {
           const col = columns[activeMobileColIdx];
@@ -1065,12 +1303,12 @@ export default function App() {
                 <span style={{ fontSize: 11, fontWeight: 700, color: wipOver ? T.danger : T.textSoft, background: T.bgElevated, borderRadius: 999, padding: "3px 10px", border: `1px solid ${T.border}` }}>
                   {colCards.length}{col.wip_limit > 0 ? `/${col.wip_limit}` : ""}
                 </span>
-                {wipOver && <span style={{ fontSize: 9, fontWeight: 800, color: T.danger, background: T.dangerSoft, borderRadius: 999, padding: "2px 7px" }}>WIP!</span>}
+                {wipOver && <span style={{ fontSize: 9, fontWeight: 800, color: T.danger, background: T.dangerSoft, borderRadius: 999, padding: "2px 7px" }}>{t("board.wipAlert")}</span>}
               </div>
               <div style={{ flex: 1, overflowY: "auto", padding: "6px 12px 16px", scrollbarWidth: "thin" }}>
                 {colCards.length === 0 && (
                   <div style={{ textAlign: "center", padding: "48px 0", color: T.textSoft, fontSize: 13, fontStyle: "italic", border: `1px dashed ${T.borderStrong}`, borderRadius: 18, background: T.bgElevated, margin: "4px 0" }}>
-                    Sin tarjetas en esta columna
+                    {t("board.noCardsColumn")}
                   </div>
                 )}
                 {colCards.map(card => (
@@ -1103,14 +1341,14 @@ export default function App() {
                   </div>
                   {col.is_wip && (
                     <span style={{ fontSize: 9, fontWeight: 800, color: wipOver ? T.danger : T.warning, background: wipOver ? T.dangerSoft : T.warningSoft, borderRadius: 999, padding: "2px 7px", marginTop: 6, display: "inline-block" }}>
-                      WIP{wipOver ? " â€” LÃMITE" : ""}
+                      WIP{wipOver ? ` — ${t("board.wipLimit")}` : ""}
                     </span>
                   )}
                 </div>
                 <div style={{ padding: "8px", overflowY: "auto", flex: 1, scrollbarWidth: "thin" }}>
                   {colCards.length === 0 && (
                     <div style={{ textAlign: "center", padding: "24px 0", color: T.textSoft, fontSize: 12, fontStyle: "italic", border: `1px dashed ${T.borderStrong}`, borderRadius: 14, background: T.bgElevated }}>
-                      Sin tarjetas
+                      {t("board.noCards")}
                     </div>
                   )}
                   {colCards.map(card => (
@@ -1122,9 +1360,13 @@ export default function App() {
           })}
         </div>
       )}
+      {page === "board" && <PhaseLegend isMobile={isMobile} />}
     </div>,
   );
 }
+
+
+
 
 
 

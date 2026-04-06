@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { FONT, SUPER_ADMIN_EMAIL } from "../constants";
 import { useTheme, useThemeMode } from "../hooks/useTheme";
+import { useLang } from "../i18n";
 import {
   assignUserToCompany,
   createCompanyBackup,
@@ -60,6 +61,8 @@ interface CompanyAdminPageProps {
 
 export function CompanyAdminPage({ currentUser, company, companyRole, featureFlags, onBack }: CompanyAdminPageProps) {
   const T = useTheme();
+  const { t, lang } = useLang();
+  const locale = lang === "es" ? "es-ES" : "en-US";
   const { mode, setMode } = useThemeMode();
   const [section, setSection] = useState<CompanyAdminSection>("empresa");
   const [members, setMembers] = useState<CompanyMember[]>([]);
@@ -88,17 +91,17 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
   const canManageCompany = companyRole === "company_admin";
 
   const sections: { id: CompanyAdminSection; label: string }[] = [
-    { id: "empresa", label: "Empresa" },
-    { id: "usuarios", label: "Usuarios" },
-    { id: "proyectos", label: "Proyectos" },
-    { id: "tableros", label: "Tableros" },
-    { id: "trabajos", label: "Trabajos" },
-    { id: "mejoras", label: "Mejoras" },
+    { id: "empresa", label: t("admin.section.company") },
+    { id: "usuarios", label: t("admin.section.users") },
+    { id: "proyectos", label: t("admin.section.projects") },
+    { id: "tableros", label: t("admin.section.boards") },
+    { id: "trabajos", label: t("admin.section.cards") },
+    { id: "mejoras", label: t("admin.section.improvements") },
     ...((featureFlags.logs_backups ? [
-      { id: "logs" as CompanyAdminSection, label: "Logs" },
-      { id: "backups" as CompanyAdminSection, label: "Backups" },
+      { id: "logs" as CompanyAdminSection, label: t("admin.section.logs") },
+      { id: "backups" as CompanyAdminSection, label: t("admin.section.backups") },
     ] : [])),
-    { id: "funcionalidades", label: "Funcionalidades" },
+    { id: "funcionalidades", label: t("admin.section.features") },
   ];
 
   const inputStyle: React.CSSProperties = {
@@ -159,12 +162,12 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
     if (!canManageCompany) return;
     const email = memberEmail.trim().toLowerCase();
     if (!email.includes("@")) {
-      setMemberFeedback("Email invalido.");
+      setMemberFeedback(t("admin.memberEmailInvalid"));
       return;
     }
     const { data: userRow } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
     if (!userRow) {
-      setMemberFeedback("El usuario debe iniciar sesion al menos una vez.");
+      setMemberFeedback(t("admin.memberNeedsLogin"));
       return;
     }
     await assignUserToCompany(company.id, (userRow as User).id, memberRole, currentUser.id);
@@ -172,7 +175,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
     const updated = await loadCompanyMembers(company.id);
     setMembers(updated);
     setMemberEmail("");
-    setMemberFeedback(`Usuario asignado como ${memberRole}.`);
+    setMemberFeedback(t("admin.memberAssigned", { role: memberRole }));
   }
 
   async function handleCreateProject() {
@@ -180,7 +183,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
     const name = projectName.trim();
     const prefix = projectPrefix.trim().toUpperCase();
     if (!name || !prefix) {
-      setProjectFeedback("Nombre y prefijo son obligatorios.");
+      setProjectFeedback(t("admin.projectRequired"));
       return;
     }
     const workspace = await getOrCreateWorkspace(company.id, currentUser.id);
@@ -190,7 +193,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
     setProjects(projs);
     setProjectName("");
     setProjectPrefix("");
-    setProjectFeedback("Proyecto creado.");
+    setProjectFeedback(t("admin.projectCreated"));
   }
 
   async function handleUpdateCompanySettings(partial: Partial<CompanySettings>) {
@@ -210,13 +213,13 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
 
   async function handleCreateBackup() {
     if (!canManageCompany || !featureFlags.logs_backups) return;
-    const summary = backupSummary.trim() || "Backup manual";
+    const summary = backupSummary.trim() || t("settings.backupManualDefault");
     await createCompanyBackup(company.id, currentUser.id, summary);
     await logCompanyAdminAction(company.id, currentUser.id, "create_backup", "company_backup", null, { summary });
     const refreshed = await loadCompanyBackups(company.id);
     setBackups(refreshed);
     setBackupSummary("");
-    setBackupFeedback("Backup generado.");
+    setBackupFeedback(t("settings.backupGenerated"));
   }
 
   async function handleCompanyFeatureToggle(featureKey: string, enabled: boolean) {
@@ -233,7 +236,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
     // Super admin deberia usar la consola global
     return (
       <div style={{ fontFamily: FONT, padding: 32, color: T.textSoft }}>
-        Esta vista esta pensada para admins de empresa. Usa la consola global.
+        {t("admin.companyConsoleOnly")}
       </div>
     );
   }
@@ -241,7 +244,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
   if (!canManageCompany) {
     return (
       <div style={{ fontFamily: FONT, padding: 32, color: T.danger, fontWeight: 700 }}>
-        Acceso denegado.
+        {t("admin.accessDenied")}
       </div>
     );
   }
@@ -249,7 +252,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
   if (loading) {
     return (
       <div style={{ fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: T.bg }}>
-        <p style={{ color: T.textSoft }}>Cargando consola...</p>
+        <p style={{ color: T.textSoft }}>{t("app.loadingConsole")}</p>
       </div>
     );
   }
@@ -258,10 +261,10 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
     <div style={{ fontFamily: FONT, backgroundColor: T.bgSoft, minHeight: "100vh" }}>
       <div style={{ backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, padding: "14px 22px", display: "flex", alignItems: "center", gap: 14, backdropFilter: "blur(18px)", position: "sticky", top: 0, zIndex: 20 }}>
         <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: T.textSoft, padding: 0 }}>
-          ← Volver
+          {t("common.back")}
         </button>
         <span style={{ color: T.border }}>|</span>
-        <span style={{ fontSize: 15, fontWeight: 800, fontFamily: FONT, color: T.text }}>Consola Empresa</span>
+        <span style={{ fontSize: 15, fontWeight: 800, fontFamily: FONT, color: T.text }}>{t("admin.companyConsoleTitle")}</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: T.accent, padding: "6px 10px", borderRadius: 999, background: T.accentSoft, border: `1px solid ${T.border}` }}>{company.name}</span>
         <div style={{ flex: 1 }} />
         <select
@@ -269,9 +272,9 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
           onChange={e => setMode(e.target.value as "system" | "light" | "dark")}
           style={{ fontFamily: FONT, fontSize: 12, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text }}
         >
-          <option value="system">Tema sistema</option>
-          <option value="light">Modo claro</option>
-          <option value="dark">Modo oscuro</option>
+          <option value="system">{t("theme.system")}</option>
+          <option value="light">{t("theme.light")}</option>
+          <option value="dark">{t("theme.dark")}</option>
         </select>
       </div>
 
@@ -288,13 +291,13 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
         <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
           {section === "empresa" && (
             <div>
-              <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: T.text }}>Configuracion</h2>
+              <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.companySettingsTitle")}</h2>
               {!featureFlags.logs_backups && (
-                <p style={{ color: T.textSoft }}>Logs y backups estan desactivados para esta empresa.</p>
+                <p style={{ color: T.textSoft }}>{t("admin.logsBackupsDisabled")}</p>
               )}
               {featureFlags.logs_backups && (
                 <div style={{ backgroundColor: T.bgSidebar, borderRadius: 16, border: `1px solid ${T.border}`, padding: 14, boxShadow: T.shadowSm }}>
-                  <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>Retencion de logs (dias)</label>
+                  <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>{t("settings.logsRetentionDays")}</label>
                   <input
                     type="number"
                     min={1}
@@ -302,7 +305,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
                     onChange={e => handleUpdateCompanySettings({ log_retention_days: Math.max(1, parseInt(e.target.value) || 1) })}
                     style={{ ...inputStyle, width: "100%", margin: "6px 0 12px" }}
                   />
-                  <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>Retencion de backups</label>
+                  <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>{t("settings.backupRetention")}</label>
                   <input
                     type="number"
                     min={1}
@@ -316,7 +319,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
                       checked={companySettings?.backup_enabled ?? true}
                       onChange={e => handleUpdateCompanySettings({ backup_enabled: e.target.checked })}
                     />
-                    Backups automaticos activos
+                    {t("settings.backupEnabled")}
                   </label>
                 </div>
               )}
@@ -325,7 +328,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
 
           {section === "usuarios" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Usuarios de empresa</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.companyUsersTitle")}</h2>
               {members.map(m => (
                 <div key={m.id} style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: "11px 15px", display: "flex", alignItems: "center", gap: 12, marginBottom: 7 }}>
                   <div style={{ flex: 1 }}>
@@ -337,15 +340,15 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
               ))}
 
               <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginTop: 14 }}>
-                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>Asignar usuario</p>
+                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>{t("admin.assignUserTitle")}</p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <input value={memberEmail} onChange={e => setMemberEmail(e.target.value)} placeholder="email@empresa.com" style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
+                  <input value={memberEmail} onChange={e => setMemberEmail(e.target.value)} placeholder={t("settings.addMemberPlaceholder")} style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
                   <select value={memberRole} onChange={e => setMemberRole(e.target.value as CompanyRole)} style={{ ...inputStyle, width: "auto" }}>
                     {["company_admin", "project_manager", "member", "viewer"].map(role => (
                       <option key={role} value={role}>{role}</option>
                     ))}
                   </select>
-                  <Btn variant="primary" onClick={handleAddMember}>Asignar</Btn>
+                  <Btn variant="primary" onClick={handleAddMember}>{t("admin.assign")}</Btn>
                 </div>
                 {!!memberFeedback && <p style={{ margin: "7px 0 0", fontSize: 11, color: T.success }}>{memberFeedback}</p>}
               </div>
@@ -354,20 +357,20 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
 
           {section === "proyectos" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Proyectos</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.projectsTitle")}</h2>
               {projects.map(project => (
                 <div key={project.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>{project.name}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>Prefijo: {project.prefix}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>{t("admin.projectPrefixLabel", { prefix: project.prefix })}</p>
                 </div>
               ))}
 
               <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginTop: 12 }}>
-                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>Crear proyecto</p>
+                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>{t("admin.createProjectTitle")}</p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <input value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Nombre" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
-                  <input value={projectPrefix} onChange={e => setProjectPrefix(e.target.value)} placeholder="PRJ" style={{ ...inputStyle, width: 80, textAlign: "center" }} />
-                  <Btn variant="primary" onClick={handleCreateProject}>Crear</Btn>
+                  <input value={projectName} onChange={e => setProjectName(e.target.value)} placeholder={t("admin.projectNamePlaceholder")} style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+                  <input value={projectPrefix} onChange={e => setProjectPrefix(e.target.value)} placeholder={t("admin.projectPrefixPlaceholder")} style={{ ...inputStyle, width: 80, textAlign: "center" }} />
+                  <Btn variant="primary" onClick={handleCreateProject}>{t("admin.createProject")}</Btn>
                 </div>
                 {!!projectFeedback && <p style={{ margin: "7px 0 0", fontSize: 11, color: T.success }}>{projectFeedback}</p>}
               </div>
@@ -376,11 +379,11 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
 
           {section === "tableros" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Tableros</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.boardsTitle")}</h2>
               {boards.map(board => (
                 <div key={board.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>{board.title}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>ID: {board.id}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>{t("admin.boardIdLabel", { id: board.id })}</p>
                 </div>
               ))}
             </div>
@@ -388,11 +391,11 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
 
           {section === "trabajos" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Trabajos (tarjetas)</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.cardsTitle")}</h2>
               {cards.map(card => (
                 <div key={card.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>{card.card_id} - {card.title}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>Board: {card.board_id}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>{t("admin.cardBoardLabel", { id: card.board_id })}</p>
                 </div>
               ))}
             </div>
@@ -400,12 +403,12 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
 
           {section === "mejoras" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Mejoras</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.improvementsTitle")}</h2>
               {improvements.map(imp => (
                 <div key={imp.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>{imp.description}</p>
                   <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>
-                    Estado: {imp.status} · 👍 {imp.vote_count || 0} · Usuario: {imp.user_name}
+                    {t("admin.improvementLine", { status: imp.status, votes: imp.vote_count || 0, user: imp.user_name })}
                   </p>
                 </div>
               ))}
@@ -414,15 +417,15 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
 
           {section === "logs" && featureFlags.logs_backups && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Logs</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.logsTitle")}</h2>
               {logs.map(log => (
                 <div key={log.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                   <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: T.text }}>{log.entity_type} · {log.change}</p>
                   <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>
-                    Empresa: {log.company_id} · User: {log.user_id} · Elemento: {log.entity_id}
+                    {t("admin.logLine", { company: log.company_id, user: log.user_id, entity: log.entity_id })}
                   </p>
                   <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>
-                    Board: {log.board_id} · {new Date(log.created_at).toLocaleString("es-ES")}
+                    {t("admin.logBoardLine", { board: log.board_id, date: new Date(log.created_at).toLocaleString(locale) })}
                   </p>
                 </div>
               ))}
@@ -431,12 +434,12 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
 
           {section === "backups" && featureFlags.logs_backups && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Backups</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.backupsTitle")}</h2>
               <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginBottom: 16 }}>
-                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>Backup manual</p>
+                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>{t("settings.backupManualTitle")}</p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <input value={backupSummary} onChange={e => setBackupSummary(e.target.value)} placeholder="Resumen" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
-                  <Btn variant="primary" onClick={handleCreateBackup}>Crear backup</Btn>
+                  <input value={backupSummary} onChange={e => setBackupSummary(e.target.value)} placeholder={t("settings.backupSummaryPlaceholder")} style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+                  <Btn variant="primary" onClick={handleCreateBackup}>{t("settings.backupCreate")}</Btn>
                 </div>
                 {!!backupFeedback && <p style={{ margin: "7px 0 0", fontSize: 11, color: T.success }}>{backupFeedback}</p>}
               </div>
@@ -444,7 +447,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
                 <div key={b.id} style={{ backgroundColor: T.bg, borderRadius: 12, border: `1.5px solid ${T.border}`, padding: "10px 14px", marginBottom: 6 }}>
                   <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: T.text }}>{b.summary}</p>
                   <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>
-                    {new Date(b.created_at).toLocaleString("es-ES")} · {b.created_by}
+                    {new Date(b.created_at).toLocaleString(locale)} · {b.created_by}
                   </p>
                 </div>
               ))}
@@ -453,7 +456,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
 
           {section === "funcionalidades" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>Funcionalidades</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: T.text }}>{t("admin.featuresTitle")}</h2>
               {featureCatalog.map(feature => {
                 const override = companyFeatureMap.get(feature.key);
                 const effective = feature.is_mandatory ? true : (override ?? feature.default_on);
@@ -465,7 +468,7 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
                         {feature.description && <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft }}>{feature.description}</p>}
                       </div>
                       {feature.is_mandatory ? (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>OBLIGATORIO</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>{t("settings.mandatory")}</span>
                       ) : (
                         <label style={{ fontSize: 11, color: T.textSoft }}>
                           Activa
@@ -484,3 +487,12 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
     </div>
   );
 }
+
+
+
+
+
+
+
+
+

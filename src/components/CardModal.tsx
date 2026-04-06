@@ -1,14 +1,16 @@
 ﻿import { useState, useRef } from "react";
 import { FONT, TASK_TYPES, PHASE_COLORS } from "../constants";
 import { useTheme } from "../hooks/useTheme";
-import { uid, nowStr, formatDur, histEntry } from "../lib/utils";
+import { uid, nowStr, formatDur, histEntry, getUserFullName } from "../lib/utils";
 import { Btn } from "./ui/Btn";
 import { TypeIcon } from "./ui/TypeIcon";
 import { Toggle } from "./ui/Toggle";
 import { FieldRow } from "./ui/FieldRow";
+import { UserPicker } from "./ui/UserPicker";
 import { Avatar } from "./ui/Avatar";
 import { JustifyModal } from "./JustifyModal";
 import { ImprovementBtn } from "./ImprovementBtn";
+import { useLang, type TranslationKey } from "../i18n";
 import type { Card, Board, BoardColumn, BoardState, FeatureFlags, User } from "../types";
 
 interface CardModalProps {
@@ -29,11 +31,19 @@ interface CardModalProps {
   onOpenCard: (id: string) => void;
 }
 
+const TYPE_LABELS: Record<Card["type"], TranslationKey> = {
+  tarea: "task.type.tarea",
+  epica: "task.type.epica",
+  iniciativa: "task.type.iniciativa",
+  bug: "task.type.bug",
+};
+
 export function CardModal({
   card, board, columns, states, users, currentUser, companyId, showImprovements, featureFlags, allCards, categories,
   onClose, onSave, onSaveCat, onOpenCard,
 }: CardModalProps) {
   const T = useTheme();
+  const { t, lang } = useLang();
   const [data, setData]             = useState<Card>({ ...card });
   const [tab, setTab]               = useState("detalle");
   const [comment, setComment]       = useState("");
@@ -61,11 +71,11 @@ export function CardModal({
   function field(key: keyof Card, val: unknown) {
     if (data[key] === val) return;
     setDirty(true);
-    setData(d => ({ ...d, [key]: val, history: [...d.history, histEntry(`"${String(key)}" â†’ "${String(val)}"`, activeUser)] }));
+    setData(d => ({ ...d, [key]: val, history: [...d.history, histEntry(t("history.fieldChanged", { key: String(key), value: String(val) }), activeUser, lang)] }));
   }
 
   function requestClose() {
-    if (!dirty || window.confirm("Hay cambios sin guardar. Â¿Deseas salir sin guardar los cambios?")) {
+    if (!dirty || window.confirm(t("card.confirmLeave"))) {
       onClose();
     }
   }
@@ -83,8 +93,8 @@ export function CardModal({
   function applyState(stateId: string, colId: string, reason: string | null) {
     const ns = states.find(s => s.id === stateId);
     const hist = [...data.history];
-    if (reason) hist.push(histEntry(`JustificaciÃ³n: ${reason}`, activeUser));
-    hist.push(histEntry(`Estado â†’ "${ns?.name}"`, activeUser));
+    if (reason) hist.push(histEntry(t("history.justification", { reason }), activeUser, lang));
+    hist.push(histEntry(t("history.stateChange", { state: ns?.name || "" }), activeUser, lang));
     setData(d => ({
       ...d, stateId, state_id: stateId, col_id: colId,
       completed_at: ns?.phase === "post" && !ns?.is_discard ? new Date().toISOString() : (ns?.phase !== "post" ? null : d.completed_at),
@@ -98,8 +108,8 @@ export function CardModal({
     if (!comment.trim()) return;
     setData(d => ({
       ...d,
-      comments: [...d.comments, { id: uid(), author: activeUser?.name || "Usuario", ts: nowStr(), text: comment.trim() }],
-      history: [...d.history, histEntry("Comentario aÃ±adido", activeUser)],
+      comments: [...d.comments, { id: uid(), author: getUserFullName(activeUser) || activeUser?.name || t("common.user"), ts: nowStr(lang), text: comment.trim() }],
+      history: [...d.history, histEntry(t("history.commentAdded"), activeUser, lang)],
     }));
     setComment("");
   }
@@ -110,7 +120,7 @@ export function CardModal({
     setData(d => ({
       ...d,
       attachments: [...d.attachments, ...names],
-      history: [...d.history, histEntry(`Archivo: ${names.join(", ")}`, activeUser)],
+      history: [...d.history, histEntry(t("history.fileAdded", { names: names.join(", ") }), activeUser, lang)],
     }));
   }
 
@@ -120,7 +130,7 @@ export function CardModal({
     setData(d => ({
       ...d,
       [key]: [...(d[key] || []), cardId],
-      history: [...d.history, histEntry(`Dependencia (${key}): ${dep?.card_id}`, activeUser)],
+      history: [...d.history, histEntry(t("history.dependencyAdded", { type: key, cardId: dep?.card_id || "" }), activeUser, lang)],
     }));
   }
 
@@ -129,12 +139,12 @@ export function CardModal({
   }
 
   const allTabs = [
-    { id: "detalle",      label: "Detalle",     always: true },
-    ...(canDeps ? [{ id: "dependencias", label: "Dependencias" }] : []),
-    { id: "comentarios",  label: "Comentarios", count: data.comments.length },
-    { id: "archivos",     label: "Archivos",    count: data.attachments.length },
-    { id: "tiempos",      label: "Tiempos"                  },
-    { id: "historial",    label: "Historial",   count: data.history.length, always: true },
+    { id: "detalle",      label: t("card.tabs.detail"), always: true },
+    ...(canDeps ? [{ id: "dependencias", label: t("card.tabs.dependencies") }] : []),
+    { id: "comentarios",  label: t("card.tabs.comments"), count: data.comments.length },
+    { id: "archivos",     label: t("card.tabs.files"), count: data.attachments.length },
+    { id: "tiempos",      label: t("card.tabs.times") },
+    { id: "historial",    label: t("card.tabs.history"), count: data.history.length, always: true },
   ].filter(t => t.always || (board.visible_fields || []).includes(t.id));
 
 
@@ -146,7 +156,7 @@ export function CardModal({
     }}>
       {pendingState && (
         <JustifyModal
-          title={pendingState.isDiscard ? "Descartar tarea" : "Reabrir tarea"}
+          title={pendingState.isDiscard ? t("justify.titleDiscard") : t("justify.titleReopen")}
           onConfirm={r => applyState(pendingState.stateId, pendingState.colId, r)}
           onCancel={() => setPendingState(null)}
         />
@@ -165,8 +175,8 @@ export function CardModal({
                 <span style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, textDecoration: isDiscard ? "line-through" : "none" }}>
                   {data.card_id}
                 </span>
-                {data.blocked && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 20, background: T.dangerSoft, color: T.danger, fontFamily: FONT }}>BLOQ.</span>}
-                {isDiscard    && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 20, background: T.dangerSoft, color: T.danger,  fontFamily: FONT }}>DESCARTADO</span>}
+                {data.blocked && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 20, background: T.dangerSoft, color: T.danger, fontFamily: FONT }}>{t("card.blockedShort")}</span>}
+                {isDiscard    && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 20, background: T.dangerSoft, color: T.danger,  fontFamily: FONT }}>{t("card.discardedShort")}</span>}
               </div>
               <input value={data.title} onChange={e => field("title", e.target.value)} style={{
                 fontFamily: FONT, fontSize: 15, fontWeight: 700, padding: "4px 0",
@@ -184,8 +194,8 @@ export function CardModal({
                   context={`tarjeta:${data.card_id}`}
                 />
               )}
-              <Btn variant="primary" onClick={() => onSave(data)}>Guardar</Btn>
-              <Btn variant="outline" onClick={requestClose} style={{ padding: "7px 11px" }}>âœ•</Btn>
+              <Btn variant="primary" onClick={() => onSave(data)}>{t("card.save")}</Btn>
+              <Btn variant="outline" onClick={requestClose} style={{ padding: "7px 11px" }}>×</Btn>
             </div>
           </div>
           {/* Tabs */}
@@ -214,61 +224,66 @@ export function CardModal({
           {tab === "detalle" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {canTypes && (board.visible_fields || []).includes("tipo") && (
-                <FieldRow label="Tipo">
+                <FieldRow label={t("card.type")}>
                   <select value={data.type} onChange={e => field("type", e.target.value)} style={inp}>
-                    {Object.entries(TASK_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    {Object.keys(TASK_TYPES).map(k => (
+                      <option key={k} value={k}>{t(TYPE_LABELS[k as Card["type"]])}</option>
+                    ))}
                   </select>
                 </FieldRow>
               )}
-              <FieldRow label="Estado">
+              <FieldRow label={t("card.state")}>
                 <select value={data.state_id || ""} onChange={e => changeState(e.target.value)} style={inp}>
                   {states.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </FieldRow>
               {canCats && (board.visible_fields || []).includes("categoria") && (
-                <FieldRow label="CategorÃ­a">
+                <FieldRow label={t("card.category")}>
                   {addingCat ? (
                     <div style={{ display: "flex", gap: 6, flex: 1 }}>
-                      <input value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Nueva categorÃ­a..." style={{ ...inp, flex: 1 }} autoFocus
+                      <input value={newCat} onChange={e => setNewCat(e.target.value)} placeholder={t("card.newCategory")} style={{ ...inp, flex: 1 }} autoFocus
                         onKeyDown={e => { if (e.key === "Enter" && newCat.trim()) { onSaveCat(newCat.trim()); field("category", newCat.trim()); setAddingCat(false); setNewCat(""); } }} />
-                      <Btn variant="primary" onClick={() => { if (newCat.trim()) { onSaveCat(newCat.trim()); field("category", newCat.trim()); setAddingCat(false); setNewCat(""); } }} style={{ padding: "6px 10px", fontSize: 12 }}>OK</Btn>
-                      <Btn variant="ghost" onClick={() => setAddingCat(false)} style={{ padding: "6px 8px" }}>âœ•</Btn>
+                      <Btn variant="primary" onClick={() => { if (newCat.trim()) { onSaveCat(newCat.trim()); field("category", newCat.trim()); setAddingCat(false); setNewCat(""); } }} style={{ padding: "6px 10px", fontSize: 12 }}>{t("card.addCategory")}</Btn>
+                      <Btn variant="ghost" onClick={() => setAddingCat(false)} style={{ padding: "6px 8px" }}>×</Btn>
                     </div>
                   ) : (
                     <select value={data.category} onChange={e => { if (e.target.value === "__new__") { setAddingCat(true); } else { field("category", e.target.value); } }} style={inp}>
                       {categories.map(c => <option key={c}>{c}</option>)}
-                      <option value="__new__">+ AÃ±adir categorÃ­a...</option>
+                      <option value="__new__">{t("card.addCategoryOption")}</option>
                     </select>
                   )}
                 </FieldRow>
               )}
               {(board.visible_fields || []).includes("dueDate") && (
-                <FieldRow label="Fecha entrega">
+                <FieldRow label={t("card.dueDate")}>
                   <input type="date" value={data.due_date} onChange={e => field("due_date", e.target.value)} style={inp} />
                 </FieldRow>
               )}
-              <FieldRow label="Creador">
-                <select value={data.creator_id || ""} onChange={e => field("creator_id", e.target.value)} style={inp}>
-                  {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
+              <FieldRow label={t("card.creator")}>
+                <UserPicker
+                  users={users}
+                  valueId={data.creator_id}
+                  onChange={val => field("creator_id", val)}
+                  placeholder={t("common.user")}
+                />
               </FieldRow>
               {(board.visible_fields || []).includes("bloqueado") && (
-                <FieldRow label="Bloqueado">
+                <FieldRow label={t("card.blocked")}>
                   <Toggle on={data.blocked} onChange={v => {
-                    setData(d => ({ ...d, blocked: v, history: [...d.history, histEntry(`Bloqueado ${v ? "activado" : "desactivado"}`, activeUser)] }));
+                    setData(d => ({ ...d, blocked: v, history: [...d.history, histEntry(v ? t("history.blockedOn") : t("history.blockedOff"), activeUser, lang)] }));
                   }} />
-                  <span style={{ fontSize: 13, fontFamily: FONT, color: T.text, marginLeft: 10 }}>{data.blocked ? "SÃ­" : "No"}</span>
+                  <span style={{ fontSize: 13, fontFamily: FONT, color: T.text, marginLeft: 10 }}>{data.blocked ? t("card.blockedYes") : t("card.blockedNo")}</span>
                 </FieldRow>
               )}
               <div>
-                <span style={{ fontSize: 12, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 6 }}>DescripciÃ³n</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 6 }}>{t("card.description")}</span>
                 <textarea value={data.description} onChange={e => field("description", e.target.value)} rows={3}
                   style={{ ...inp, resize: "vertical", lineHeight: 1.6 }} />
               </div>
               {creator && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                   <Avatar user={creator} size={22} />
-                  <span style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT }}>Creado por {creator.name}</span>
+                  <span style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT }}>{t("card.createdBy", { name: getUserFullName(creator) || creator.name })}</span>
                 </div>
               )}
             </div>
@@ -277,14 +292,14 @@ export function CardModal({
           {tab === "dependencias" && (
             <div>
               {(["depends_on", "blocked_by"] as const).map(key => {
-                const label = key === "depends_on" ? "Dependo de" : "Dependen de mÃ­";
-                const hint  = key === "depends_on" ? "Esta tarea espera a que las siguientes terminen." : "Las siguientes esperan a que esta termine.";
+                const label = key === "depends_on" ? t("dependencies.dependsOn") : t("dependencies.blockedBy");
+                const hint  = key === "depends_on" ? t("dependencies.hint.dependsOn") : t("dependencies.hint.blockedBy");
                 return (
                   <div key={key} style={{ marginBottom: 20 }}>
                     <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>{label}</p>
                     <p style={{ margin: "0 0 10px", fontSize: 11, fontFamily: FONT, color: T.textSoft }}>{hint}</p>
                     {!(data[key] || []).length && (
-                      <p style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT, fontStyle: "italic" }}>Sin dependencias</p>
+                      <p style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT, fontStyle: "italic" }}>{t("dependencies.none")}</p>
                     )}
                     {(data[key] || []).map(depId => {
                       const dep = allCards.find(c => c.id === depId);
@@ -296,16 +311,16 @@ export function CardModal({
                           backgroundColor: T.bgSoft, borderRadius: 10, padding: "8px 12px", marginBottom: 6,
                           border: `1.5px solid ${resolved ? "#1D9E75" : "#E24B4A"}44`,
                         }}>
-                          <span style={{ color: resolved ? "#1D9E75" : "#E24B4A", fontSize: 13, fontWeight: 700 }}>{resolved ? "âœ“" : "â³"}</span>
+                          <span style={{ color: resolved ? "#1D9E75" : "#E24B4A", fontSize: 13, fontWeight: 700 }}>{resolved ? "✓" : "⏳"}</span>
                           <TypeIcon type={dep.type} size={13} />
                           <span style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT }}>{dep.card_id}</span>
                           <span onClick={() => onOpenCard(dep.id)} style={{ fontSize: 13, fontFamily: FONT, color: "#7F77DD", flex: 1, cursor: "pointer", textDecoration: "underline" }}>
                             {dep.title}
                           </span>
                           <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 20, background: resolved ? "#E1F5EE" : "#FCEBEB", color: resolved ? "#085041" : "#c0392b", fontFamily: FONT, fontWeight: 700 }}>
-                            {resolved ? "Resuelta" : "Pendiente"}
+                            {resolved ? t("dependencies.resolved") : t("dependencies.pending")}
                           </span>
-                          <button onClick={() => removeDep(depId, key)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textSoft, fontSize: 14 }}>âœ•</button>
+                          <button onClick={() => removeDep(depId, key)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textSoft, fontSize: 14 }}>×</button>
                         </div>
                       );
                     })}
@@ -316,7 +331,7 @@ export function CardModal({
                         : [];
                       return (
                         <>
-                          <input value={q} onChange={e => setDepSearch(s => ({ ...s, [key]: e.target.value }))} placeholder="Buscar tarea..." style={{ ...inp, marginTop: 8 }} />
+                          <input value={q} onChange={e => setDepSearch(s => ({ ...s, [key]: e.target.value }))} placeholder={t("dependencies.searchPlaceholder")} style={{ ...inp, marginTop: 8 }} />
                           {results.length > 0 && (
                             <div style={{ backgroundColor: T.bg, border: `1.5px solid ${T.border}`, borderRadius: 10, marginTop: 4, overflow: "hidden" }}>
                               {results.slice(0, 5).map(c => (
@@ -327,7 +342,7 @@ export function CardModal({
                             <TypeIcon type={c.type} size={13} />
                             <span style={{ fontSize: 11, color: T.textSoft, fontFamily: FONT, fontWeight: 600 }}>{c.card_id}</span>
                             <span style={{ fontSize: 13, fontFamily: FONT, color: T.text, flex: 1 }}>{c.title}</span>
-                                {c.completed_at && <span style={{ fontSize: 10, color: "#1D9E75" }}>âœ“</span>}
+                                {c.completed_at && <span style={{ fontSize: 10, color: "#1D9E75" }}>✓</span>}
                               </div>
                             ))}
                           </div>
@@ -344,7 +359,7 @@ export function CardModal({
           {tab === "comentarios" && (
             <div>
               {!data.comments.length && (
-                <p style={{ textAlign: "center", padding: "20px 0", color: T.textSoft, fontSize: 13, fontFamily: FONT }}>Sin comentarios.</p>
+                <p style={{ textAlign: "center", padding: "20px 0", color: T.textSoft, fontSize: 13, fontFamily: FONT }}>{t("comments.none")}</p>
               )}
               {data.comments.map(c => (
                 <div key={c.id} style={{ backgroundColor: T.bgSoft, borderRadius: 12, padding: "10px 13px", marginBottom: 9, border: `1px solid ${T.border}` }}>
@@ -358,8 +373,8 @@ export function CardModal({
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                 <input value={comment} onChange={e => setComment(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && addComment()}
-                  placeholder="Escribe un comentario..." style={{ ...inp, flex: 1 }} />
-                <Btn variant="primary" onClick={addComment} style={{ whiteSpace: "nowrap" }}>AÃ±adir</Btn>
+                  placeholder={t("card.commentPlaceholder")} style={{ ...inp, flex: 1 }} />
+                <Btn variant="primary" onClick={addComment} style={{ whiteSpace: "nowrap" }}>{t("card.addComment")}</Btn>
               </div>
             </div>
           )}
@@ -367,11 +382,11 @@ export function CardModal({
           {tab === "archivos" && (
             <div>
               {!data.attachments.length && (
-                <p style={{ textAlign: "center", padding: "20px 0", color: T.textSoft, fontSize: 13, fontFamily: FONT }}>Sin archivos.</p>
+                <p style={{ textAlign: "center", padding: "20px 0", color: T.textSoft, fontSize: 13, fontFamily: FONT }}>{t("files.none")}</p>
               )}
               {data.attachments.map((a, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, backgroundColor: T.bgSoft, borderRadius: 10, padding: "9px 12px", marginBottom: 7, border: `1px solid ${T.border}` }}>
-                  <span style={{ fontSize: 15 }}>ðŸ“„</span>
+                  <span style={{ fontSize: 15 }}>📄</span>
                   <span style={{ fontSize: 13, fontFamily: FONT, color: T.text }}>{a}</span>
                 </div>
               ))}
@@ -381,7 +396,7 @@ export function CardModal({
                 borderRadius: 10, border: `2px dashed ${T.borderMed}`,
                 backgroundColor: "transparent", color: T.textSoft, cursor: "pointer", width: "100%",
               }}>
-                + Adjuntar archivo
+                {t("files.attach")}
               </button>
             </div>
           )}
@@ -394,7 +409,7 @@ export function CardModal({
             return (
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: T.textSoft, fontFamily: FONT }}>Tiempo total</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: T.textSoft, fontFamily: FONT }}>{t("card.totalTime")}</span>
                   <span style={{ fontSize: 20, fontWeight: 700, color: T.text, fontFamily: FONT }}>{formatDur(total)}</span>
                 </div>
                 {all.map(({ c, ms }) => {
@@ -407,7 +422,7 @@ export function CardModal({
                           <div style={{ width: 8, height: 8, borderRadius: "50%", background: cc }} />
                           <span style={{ fontSize: 12, fontWeight: 600, fontFamily: FONT, color: T.text }}>{c.name}</span>
                           {c.id === data.col_id && (
-                            <span style={{ fontSize: 9, background: "#7F77DD22", color: "#7F77DD", borderRadius: 20, padding: "1px 5px", fontFamily: FONT, fontWeight: 700 }}>actual</span>
+                            <span style={{ fontSize: 9, background: "#7F77DD22", color: "#7F77DD", borderRadius: 20, padding: "1px 5px", fontFamily: FONT, fontWeight: 700 }}>{t("card.currentCol")}</span>
                           )}
                         </div>
                         <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: T.text }}>{formatDur(ms)}</span>
@@ -433,7 +448,7 @@ export function CardModal({
                       <p style={{ fontSize: 13, margin: "0 0 3px", fontFamily: FONT, color: T.text, lineHeight: 1.5 }}>{h.msg}</p>
                       <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                         {u && <Avatar user={u} size={16} />}
-                        <span style={{ fontSize: 11, color: T.textSoft, fontFamily: FONT }}>{h.userName || "Sistema"} Â· {h.ts}</span>
+                        <span style={{ fontSize: 11, color: T.textSoft, fontFamily: FONT }}>{h.userName || t("history.system")} · {h.ts}</span>
                       </div>
                     </div>
                   </div>
@@ -447,4 +462,5 @@ export function CardModal({
     </div>
   );
 }
+
 

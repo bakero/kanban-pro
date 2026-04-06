@@ -5,7 +5,11 @@
       "Read(//c/Users/Asus/AppData/Local/**)",
       "Read(//c/Users/Asus/AppData/Roaming/**)",
       "Read(//c/Users/Asus/**)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(node fix-enc.mjs)",
+      "Bash(rm fix-enc.mjs)",
+      "Bash(node db-additions.mjs)",
+      "Bash(rm db-additions.mjs)"
     ]
   }
 }

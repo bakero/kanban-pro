@@ -2,37 +2,32 @@ export const FONT = "'Plus Jakarta Sans', 'Inter Tight', sans-serif";
 
 export const SUPER_ADMIN_EMAIL = "bkasero@gmail.com";
 
+export const DOCS_URL = (import.meta.env.VITE_DOCS_URL as string | undefined) || "/docs";
+
+export const ADMIN_DOCS_URL = (import.meta.env.VITE_ADMIN_DOCS_URL as string | undefined) || "/docs/admin";
+
 export const PHASE_COLORS: Record<string, string> = {
-  pre:  "#8A94A6",
+  pre: "#8A94A6",
   work: "#3E7BFA",
   post: "#27A376",
 };
 
 export const TASK_TYPES = {
-  tarea:      { label: "Tarea",      color: "#1D9E75", icon: "✓" },
-  epica:      { label: "Épica",      color: "#7F77DD", icon: "⬡" },
-  iniciativa: { label: "Iniciativa", color: "#2c2c2e", icon: "◈" },
-  bug:        { label: "Bug",        color: "#E24B4A", icon: "⚡" },
+  tarea: { color: "#1D9E75", icon: "?" },
+  epica: { color: "#7F77DD", icon: "?" },
+  iniciativa: { color: "#2c2c2e", icon: "?" },
+  bug: { color: "#E24B4A", icon: "?" },
 };
 
 export const PHASE_META = {
-  pre:  { label: "Pre-trabajo",  color: "#888780" },
-  work: { label: "En trabajo",   color: "#378ADD" },
-  post: { label: "Post-trabajo", color: "#1D9E75" },
-};
+  pre: { labelKey: "board.legend.pre", color: "#888780" },
+  work: { labelKey: "board.legend.work", color: "#378ADD" },
+  post: { labelKey: "board.legend.post", color: "#1D9E75" },
+} as const;
 
-export const HIDE_DONE_OPTIONS = [
-  { value: 0,  label: "Nunca ocultar"         },
-  { value: 1,  label: "Después de 1 día"      },
-  { value: 3,  label: "Después de 3 días"     },
-  { value: 5,  label: "Después de 5 días"     },
-  { value: 7,  label: "Después de 7 días"     },
-  { value: 15, label: "Después de 15 días"    },
-  { value: 21, label: "Después de 21 días"    },
-  { value: 30, label: "Después de 30 días"    },
-];
+export const HIDE_DONE_VALUES = [0, 1, 3, 5, 7, 15, 21, 30];
 
 export const DEFAULT_VISIBLE = [
-  "tipo","categoria","estado","dueDate","creador","bloqueado",
-  "descripcion","dependencias","comentarios","archivos","tiempos","historial",
+  "tipo", "categoria", "estado", "dueDate", "creador", "bloqueado",
+  "descripcion", "dependencias", "comentarios", "archivos", "tiempos", "historial",
 ];

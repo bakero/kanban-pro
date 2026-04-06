@@ -1,6 +1,7 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useTheme } from "../hooks/useTheme";
 import { ImprovementModal } from "./ImprovementModal";
+import { useLang } from "../i18n";
 
 interface ImprovementBtnProps {
   companyId: string;
@@ -12,13 +13,14 @@ interface ImprovementBtnProps {
 
 export function ImprovementBtn({ companyId, boardId, userId, userName, context }: ImprovementBtnProps) {
   const T = useTheme();
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <button
         onClick={e => { e.stopPropagation(); setOpen(true); }}
-        title="Proponer mejora"
+        title={t("improvements.add")}
         style={{
           background: "none", border: "none", cursor: "pointer",
           padding: "2px 4px", borderRadius: 6, lineHeight: 1,

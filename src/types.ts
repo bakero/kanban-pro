@@ -11,11 +11,15 @@ export interface User {
   id: string;
   auth_user_id?: string;
   name: string;
+  first_name?: string | null;
+  last_name?: string | null;
   email: string;
   initials: string;
   color: string;
   role?: "MASTER" | "USER";
   avatar_url?: string | null;
+  lang?: string;
+  ui_config?: Record<string, unknown>;
   google_login_enabled?: boolean;
   google_confirmed_at?: string | null;
   activation_email_sent_at?: string | null;
@@ -29,11 +33,13 @@ export interface Company {
   id: string;
   name: string;
   slug: string;
+  company_code?: string | null;
   contact_email: string;
   logo_url?: string | null;
   license_plan: "trial" | "starter" | "professional" | "enterprise";
   license_expires_at?: string | null;
   created_by: string;
+  owner_id?: string | null;
   created_at: string;
   is_active: boolean;
 }
@@ -69,7 +75,7 @@ export interface CompanyInvite {
 }
 
 // ============================================================
-// WORKSPACE  (espacio de trabajo — agrupa proyectos)
+// WORKSPACE  (espacio de trabajo - agrupa proyectos)
 // ============================================================
 export interface Workspace {
   id: string;
@@ -77,6 +83,8 @@ export interface Workspace {
   name: string;
   description?: string;
   created_by: string;
+  owner_id?: string | null;
+  numeric_id?: number | null;
   created_at: string;
   sort_order: number;
 }
@@ -91,6 +99,7 @@ export interface Project {
   description?: string;
   prefix: string;
   created_by: string;
+  owner_id?: string | null;
   created_at: string;
   sort_order: number;
   is_archived: boolean;
@@ -152,6 +161,7 @@ export interface Board {
   prefix: string;
   card_seq: number;
   owner_user_id: string;
+  numeric_id?: number | null;
   board_config: { public: boolean; requireLogin: boolean; hideDoneAfterDays: number };
   visible_fields: string[];
   categories: string[];
@@ -185,6 +195,7 @@ export interface Card {
   creator_id: string; attachments: string[]; comments: Comment[];
   history: HistoryEntry[]; depends_on: string[]; blocked_by: string[];
   time_per_col: Record<string, number>; col_since: number;
+  seq_id?: number | null;
   created_at: string; completed_at: string | null; discarded_at: string | null;
 }
 

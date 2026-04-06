@@ -1,7 +1,7 @@
 ﻿import { useState } from "react";
-import { FONT, PHASE_COLORS, PHASE_META, HIDE_DONE_OPTIONS, SUPER_ADMIN_EMAIL } from "../../constants";
+import { FONT, PHASE_COLORS, PHASE_META, HIDE_DONE_VALUES, SUPER_ADMIN_EMAIL } from "../../constants";
 import { useTheme, useThemeMode } from "../../hooks/useTheme";
-import { uid } from "../../lib/utils";
+import { getUserFullName, uid } from "../../lib/utils";
 import {
   saveBoard,
   saveColumn,
@@ -18,6 +18,7 @@ import { Toggle } from "../ui/Toggle";
 import { Avatar } from "../ui/Avatar";
 import { DragList } from "../ui/DragList";
 import { ImprovementBtn } from "../ImprovementBtn";
+import { useLang } from "../../i18n";
 import type {
   Board, BoardColumn, BoardState, User,
   Company, CompanyBackup, CompanySettings, Project, ProjectMember, Feature, FeatureFlags, CompanyRole, ProjectRole,
@@ -48,12 +49,6 @@ interface SettingsPageProps {
   onCreateCompanyBackup: (summary: string) => Promise<void>;
 }
 
-const ROLE_LABELS: Record<ProjectRole, string> = {
-  project_manager: "Responsable",
-  member: "Miembro",
-  viewer: "Solo lectura",
-};
-
 export function SettingsPage({
   board, project, columns, states, projectMembers, currentUser, myRole, myProjectRole,
   company, companySettings, companyBackups,
@@ -62,7 +57,13 @@ export function SettingsPage({
   onUpdateProjectMembers, onUpdateFeatureFlag, onUpdateCompanySettings, onCreateCompanyBackup,
 }: SettingsPageProps) {
   const T = useTheme();
+  const { t, lang } = useLang();
   const { mode, setMode } = useThemeMode();
+  const ROLE_LABELS: Record<ProjectRole, string> = {
+    project_manager: t("roles.projectManager"),
+    member: t("roles.member"),
+    viewer: t("roles.viewer"),
+  };
   const canManageProject = myRole === "company_admin" || myProjectRole === "project_manager";
   const canManageCompany = myRole === "company_admin";
   const showLogsBackups = featureFlags.logs_backups !== false;
@@ -88,28 +89,33 @@ export function SettingsPage({
   };
 
   const sections = [
-    ...(canManageCompany && showLogsBackups ? [{ id: "empresa", label: "Empresa" }] : []),
+    ...(canManageCompany && showLogsBackups ? [{ id: "empresa", label: t("settings.section.company") }] : []),
     ...(activeProjectId ? [
-      { id: "miembros", label: "Miembros" },
-      { id: "funcionalidades", label: "Funcionalidades" },
+      { id: "miembros", label: t("settings.section.members") },
+      { id: "funcionalidades", label: t("settings.section.features") },
     ] : []),
-    { id: "estados", label: "Estados" },
-    { id: "columnas", label: "Columnas" },
-    ...(featureFlags.categories !== false ? [{ id: "categorias", label: "CategorÃ­as" }] : []),
-    { id: "campos", label: "Campos del modal" },
-    { id: "acceso", label: "Acceso" },
+    { id: "estados", label: t("settings.section.states") },
+    { id: "columnas", label: t("settings.section.columns") },
+    ...(featureFlags.categories !== false ? [{ id: "categorias", label: t("settings.section.categories") }] : []),
+    { id: "campos", label: t("settings.section.fields") },
+    { id: "acceso", label: t("settings.section.access") },
   ];
 
   const OPT_FIELDS = [
-    ...(featureFlags.card_types !== false ? [{ id: "tipo", label: "Tipo" }] : []),
-    ...(featureFlags.categories !== false ? [{ id: "categoria", label: "CategorÃ­a" }] : []),
-    { id: "dueDate", label: "Fecha entrega" },
-    { id: "bloqueado", label: "Bloqueado" },
-    ...(featureFlags.dependencies !== false ? [{ id: "dependencias", label: "Dependencias" }] : []),
-    { id: "comentarios", label: "Comentarios" },
-    { id: "archivos", label: "Archivos" },
-    { id: "tiempos", label: "Tiempos" },
+    ...(featureFlags.card_types !== false ? [{ id: "tipo", label: t("card.type") }] : []),
+    ...(featureFlags.categories !== false ? [{ id: "categoria", label: t("card.category") }] : []),
+    { id: "dueDate", label: t("card.dueDate") },
+    { id: "bloqueado", label: t("card.blocked") },
+    ...(featureFlags.dependencies !== false ? [{ id: "dependencias", label: t("card.dependencies") }] : []),
+    { id: "comentarios", label: t("card.tabs.comments") },
+    { id: "archivos", label: t("card.tabs.files") },
+    { id: "tiempos", label: t("card.tabs.times") },
   ];
+
+  const hideDoneOptions = HIDE_DONE_VALUES.map(value => ({
+    value,
+    label: value === 0 ? t("settings.hideDoneNever") : t("settings.hideDoneAfter", { days: value }),
+  }));
 
   const assignedStateIds = new Set(columns.flatMap(c => c.state_ids || []));
   const unassigned = states.filter(s => !assignedStateIds.has(s.id));
@@ -125,14 +131,14 @@ export function SettingsPage({
   async function handleAddMember() {
     const email = memberEmail.trim().toLowerCase();
     if (!email || !email.includes("@") || !activeProjectId) {
-      setMemberFeedback("Introduce un email vÃ¡lido.");
+      setMemberFeedback(t("settings.memberEmailInvalid"));
       return;
     }
     // Look up user by email
     const { supabase } = await import("../../lib/supabase");
     const { data: userRow } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
     if (!userRow) {
-      setMemberFeedback("No se encontrÃ³ ningÃºn usuario con ese email. El usuario debe haber iniciado sesiÃ³n al menos una vez.");
+      setMemberFeedback(t("settings.memberNotFound"));
       return;
     }
     const user = userRow as User;
@@ -141,7 +147,7 @@ export function SettingsPage({
     onUpdateProjectMembers([...projectMembers, newMember]);
     setMemberUsers(prev => prev.some(u => u.id === user.id) ? prev : [...prev, user]);
     setMemberEmail("");
-    setMemberFeedback(`${user.name} aÃ±adido como ${ROLE_LABELS[memberRole]}.`);
+    setMemberFeedback(t("settings.memberAdded", { name: getUserFullName(user) || user.name, role: ROLE_LABELS[memberRole] }));
   }
 
   async function handleRemoveMember(userId: string) {
@@ -182,7 +188,7 @@ export function SettingsPage({
   }
 
   async function addColumn() {
-    const nc: BoardColumn = { id: uid(), board_id: board.id, name: "Nueva columna", phase: "pre", state_ids: [], wip_limit: 0, is_wip: false, sort_order: columns.length };
+    const nc: BoardColumn = { id: uid(), board_id: board.id, name: t("settings.addColumnName"), phase: "pre", state_ids: [], wip_limit: 0, is_wip: false, sort_order: columns.length };
     await saveColumn(nc, currentUser.id); onUpdateColumns([...columns, nc]);
   }
   async function removeCol(id: string) { await deleteColumn(id, currentUser.id); onUpdateColumns(columns.filter(c => c.id !== id)); }
@@ -236,42 +242,46 @@ export function SettingsPage({
   async function handleCreateBackup() {
     if (!canManageCompany) return;
     if (!showLogsBackups) return;
-    const summary = companyBackupSummary.trim() || "Backup manual";
+    const summary = companyBackupSummary.trim() || t("settings.backupManualDefault");
     await onCreateCompanyBackup(summary);
     setCompanyBackupSummary("");
-    setCompanyBackupFeedback("Backup generado.");
+    setCompanyBackupFeedback(t("settings.backupGenerated"));
   }
 
   return (
     <div style={{ fontFamily: FONT, backgroundColor: T.bgSoft, minHeight: "100vh", position: "relative" }}>
       <div style={{ backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, padding: "14px 22px", display: "flex", alignItems: "center", gap: 14, backdropFilter: "blur(18px)" }}>
         <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: T.textSoft, padding: 0 }}>
-          â† Volver
+          ← {t("common.back")}
         </button>
         <span style={{ color: T.border }}>|</span>
         <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.text, flex: 1 }}>
-          ConfiguraciÃ³n â€” {project ? `${project.name} / ` : ""}{board.title}
+          {t("settings.title")} — {project ? `${project.name} / ` : ""}{board.title}
         </span>
         <select
           value={mode}
           onChange={e => setMode(e.target.value as "system" | "light" | "dark")}
           style={{ fontFamily: FONT, fontSize: 12, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "9px 10px", backgroundColor: T.bgElevated, color: T.text }}
         >
-          <option value="system">Tema sistema</option>
-          <option value="light">Modo claro</option>
-          <option value="dark">Modo oscuro</option>
+          <option value="system">{t("theme.system")}</option>
+          <option value="light">{t("theme.light")}</option>
+          <option value="dark">{t("theme.dark")}</option>
         </select>
         {currentUser.email.toLowerCase() === SUPER_ADMIN_EMAIL && (
           <a
             href="/admin.html"
             style={{ fontSize: 11, fontWeight: 700, color: T.danger, border: `1px solid ${T.danger}`, padding: "6px 10px", borderRadius: 999, textDecoration: "none", marginRight: 8 }}
           >
-            Consola admin
+            {t("menu.openAdminConsole")}
           </a>
         )}
         {featureFlags.improvements && (
-          <ImprovementBtn companyId={company.id} boardId={board.id} userId={currentUser.id} userName={currentUser.name} context="configuraciÃ³n" />
+          <ImprovementBtn companyId={company.id} boardId={board.id} userId={currentUser.id} userName={currentUser.name} context="configuracion" />
         )}
+      </div>
+
+      <div style={{ padding: "10px 22px 0", fontSize: 11, color: T.textSoft, fontFamily: FONT }}>
+        {t("settings.languageNote")}
       </div>
 
       <div style={{ display: "flex", minHeight: "calc(100vh - 52px)" }}>
@@ -287,15 +297,15 @@ export function SettingsPage({
 
         <div style={{ flex: 1, padding: "22px 26px", overflowY: "auto" }}>
 
-          {/* â”€â”€ EMPRESA â”€â”€ */}
+          {/* Empresa */}
           {section === "empresa" && (
             <div>
               <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>
-                ConfiguraciÃ³n de empresa â€” {company.name}
+                {t("settings.companyTitle", { name: company.name })}
               </h2>
 
               <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>RetenciÃ³n de logs (dÃ­as)</label>
+                <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>{t("settings.logsRetentionDays")}</label>
                 <input
                   type="number"
                   min={1}
@@ -303,7 +313,7 @@ export function SettingsPage({
                   onChange={e => updateCompanySettings({ log_retention_days: Math.max(1, parseInt(e.target.value) || 1) })}
                   style={{ ...inp, width: "100%", margin: "6px 0 12px" }}
                 />
-                <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>RetenciÃ³n de backups</label>
+                <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>{t("settings.backupRetention")}</label>
                 <input
                   type="number"
                   min={1}
@@ -317,20 +327,20 @@ export function SettingsPage({
                     checked={companySettings?.backup_enabled ?? true}
                     onChange={e => updateCompanySettings({ backup_enabled: e.target.checked })}
                   />
-                  Backups automÃ¡ticos activos
+                  {t("settings.backupEnabled")}
                 </label>
               </div>
 
               <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginBottom: 16 }}>
-                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>Backup manual</p>
+                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>{t("settings.backupManualTitle")}</p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <input
                     value={companyBackupSummary}
                     onChange={e => setCompanyBackupSummary(e.target.value)}
-                    placeholder="Resumen"
+                    placeholder={t("settings.backupSummaryPlaceholder")}
                     style={{ ...inp, flex: 1, minWidth: 160 }}
                   />
-                  <Btn variant="primary" onClick={handleCreateBackup}>Crear backup</Btn>
+                  <Btn variant="primary" onClick={handleCreateBackup}>{t("settings.backupCreate")}</Btn>
                 </div>
                 {!!companyBackupFeedback && (
                   <p style={{ margin: "7px 0 0", fontSize: 11, color: T.success }}>{companyBackupFeedback}</p>
@@ -339,16 +349,16 @@ export function SettingsPage({
 
               <div>
                 <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>
-                  Backups disponibles ({companyBackups.length})
+                  {t("settings.backupsAvailable", { count: companyBackups.length })}
                 </h3>
                 {companyBackups.length === 0 && (
-                  <p style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT }}>Sin backups aÃºn.</p>
+                  <p style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT }}>{t("settings.backupsNone")}</p>
                 )}
                 {companyBackups.map(b => (
                   <div key={b.id} style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${T.border}`, padding: "9px 13px", marginBottom: 6 }}>
                     <p style={{ margin: 0, fontSize: 12, fontWeight: 700, fontFamily: FONT, color: T.text }}>{b.summary}</p>
                     <p style={{ margin: "2px 0 0", fontSize: 10, color: T.textSoft, fontFamily: FONT }}>
-                      {new Date(b.created_at).toLocaleString("es-ES")}
+                      {new Date(b.created_at).toLocaleString(lang === "es" ? "es-ES" : "en-US")}
                     </p>
                   </div>
                 ))}
@@ -356,15 +366,15 @@ export function SettingsPage({
             </div>
           )}
 
-          {/* â”€â”€ MIEMBROS â”€â”€ */}
+          {/* Miembros */}
           {section === "miembros" && activeProjectId && (
             <div>
               <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>
-                Miembros del proyecto{project ? ` â€” ${project.name}` : ""}
+                {project ? t("settings.projectMembersTitle", { name: project.name }) : t("settings.projectMembersTitleFallback")}
               </h2>
 
               {projectMembers.length === 0 && (
-                <p style={{ fontSize: 13, color: T.textSoft, fontFamily: FONT, fontStyle: "italic" }}>Sin miembros asignados aÃºn.</p>
+                <p style={{ fontSize: 13, color: T.textSoft, fontFamily: FONT, fontStyle: "italic" }}>{t("settings.projectMembersEmpty")}</p>
               )}
 
               {projectMembers.map(member => {
@@ -389,7 +399,7 @@ export function SettingsPage({
                       </span>
                     )}
                     {canManageProject && member.user_id !== currentUser.id && (
-                      <Btn variant="danger" onClick={() => handleRemoveMember(member.user_id)} style={{ fontSize: 11, padding: "4px 9px" }}>Quitar</Btn>
+                      <Btn variant="danger" onClick={() => handleRemoveMember(member.user_id)} style={{ fontSize: 11, padding: "4px 9px" }}>{t("settings.remove")}</Btn>
                     )}
                   </div>
                 );
@@ -397,17 +407,17 @@ export function SettingsPage({
 
               {canManageProject && (
                 <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginTop: 14 }}>
-                  <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>AÃ±adir miembro</p>
+                  <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("settings.addMemberTitle")}</p>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <input value={memberEmail} onChange={e => setMemberEmail(e.target.value)}
-                      placeholder="email@empresa.com" style={{ ...inp, flex: 1, minWidth: 160 }} />
+                      placeholder={t("settings.addMemberPlaceholder")} style={{ ...inp, flex: 1, minWidth: 160 }} />
                     <select value={memberRole} onChange={e => setMemberRole(e.target.value as ProjectRole)}
                       style={{ ...inp, width: "auto" }}>
                       {(Object.keys(ROLE_LABELS) as ProjectRole[]).map(r => (
                         <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                       ))}
                     </select>
-                    <Btn variant="primary" onClick={handleAddMember}>AÃ±adir</Btn>
+                    <Btn variant="primary" onClick={handleAddMember}>{t("settings.addMemberButton")}</Btn>
                   </div>
                   {!!memberFeedback && (
                     <p style={{ margin: "7px 0 0", fontSize: 11, color: T.success, fontFamily: FONT }}>{memberFeedback}</p>
@@ -417,17 +427,16 @@ export function SettingsPage({
             </div>
           )}
 
-          {/* â”€â”€ FUNCIONALIDADES â”€â”€ */}
+          {/* Funcionalidades */}
           {section === "funcionalidades" && activeProjectId && (
             <div>
-              <h2 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Funcionalidades activas</h2>
+              <h2 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("settings.featuresTitle")}</h2>
               <p style={{ margin: "0 0 18px", fontSize: 12, color: T.textSoft, fontFamily: FONT }}>
-                Las funcionalidades desactivadas no son visibles, pero sus datos se siguen registrando.
-                Las marcadas como obligatorias no se pueden desactivar.
+                {t("settings.featuresHint")}
               </p>
 
               {featureCatalog.length === 0 && (
-                // Fallback cuando no se ha cargado el catÃ¡logo: mostrar las flags actuales
+                // Fallback cuando no se ha cargado el catálogo: mostrar las flags actuales
                 Object.entries(featureFlags).map(([key, enabled]) => (
                   <div key={key} style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${T.border}`, padding: "11px 15px", display: "flex", alignItems: "center", gap: 11, marginBottom: 7 }}>
                     <Toggle on={enabled} onChange={v => canManageCompany && handleFeatureToggle(key, v)} />
@@ -447,7 +456,7 @@ export function SettingsPage({
                     </div>
                     {feature.is_mandatory && (
                       <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.accentSoft, borderRadius: 20, padding: "2px 8px", border: `1px solid ${T.accent}33` }}>
-                        OBLIGATORIO
+                        {t("settings.mandatory")}
                       </span>
                     )}
                   </div>
@@ -456,10 +465,10 @@ export function SettingsPage({
             </div>
           )}
 
-          {/* â”€â”€ ESTADOS â”€â”€ */}
+          {/* Estados */}
           {section === "estados" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Estados</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("settings.statesTitle")}</h2>
               {(["pre", "work", "post"] as const).map(phase => {
                 const pm = PHASE_META[phase];
                 const phaseStates = states.filter(s => s.phase === phase);
@@ -467,47 +476,49 @@ export function SettingsPage({
                   <div key={phase} style={{ marginBottom: 22 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
                       <div style={{ width: 10, height: 10, borderRadius: "50%", background: pm.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: 13, fontWeight: 700, fontFamily: FONT, color: pm.color }}>{pm.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, fontFamily: FONT, color: pm.color }}>{t(pm.labelKey)}</span>
                       <div style={{ flex: 1, height: 1, background: `${pm.color}33` }} />
-                      <span style={{ fontSize: 11, color: T.textSoft, fontFamily: FONT }}>{phaseStates.length} estado{phaseStates.length !== 1 ? "s" : ""}</span>
+                      <span style={{ fontSize: 11, color: T.textSoft, fontFamily: FONT }}>
+                        {t("settings.statesCount", { count: phaseStates.length })}
+                      </span>
                     </div>
-                    {!phaseStates.length && <p style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT, fontStyle: "italic", marginLeft: 20 }}>Sin estados</p>}
+                    {!phaseStates.length && <p style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT, fontStyle: "italic", marginLeft: 20 }}>{t("settings.statesEmpty")}</p>}
                     <DragList items={phaseStates} keyFn={s => s.id} onReorder={reordered => reorderStates([...states.filter(s => s.phase !== phase), ...reordered])} renderItem={s => (
                       <div style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${pm.color}44`, padding: "9px 13px", display: "flex", alignItems: "center", gap: 9, marginBottom: 6, marginLeft: 20 }}>
                         <div style={{ width: 7, height: 7, borderRadius: "50%", background: pm.color, flexShrink: 0 }} />
                         <span style={{ fontSize: 13, fontWeight: 600, fontFamily: FONT, flex: 1, color: T.text }}>{s.name}</span>
                         <select value={s.phase} onChange={e => updateStatePhase(s.id, e.target.value as "pre" | "work" | "post")} style={{ ...inp, width: "auto", fontSize: 11, padding: "3px 7px" }}>
-                          {Object.entries(PHASE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                          {Object.entries(PHASE_META).map(([k, v]) => <option key={k} value={k}>{t(v.labelKey)}</option>)}
                         </select>
-                        <Btn variant="danger" onClick={() => removeStateItem(s.id)} style={{ fontSize: 11, padding: "3px 8px" }}>âœ•</Btn>
+                        <Btn variant="danger" onClick={() => removeStateItem(s.id)} style={{ fontSize: 11, padding: "3px 8px" }}>×</Btn>
                       </div>
                     )} />
                   </div>
                 );
               })}
               <div style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${T.border}`, padding: 13, marginTop: 6 }}>
-                <p style={{ margin: "0 0 9px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>AÃ±adir estado</p>
+                <p style={{ margin: "0 0 9px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("settings.addStateTitle")}</p>
                 <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-                  <input value={newStateName} onChange={e => setNewStateName(e.target.value)} placeholder="Nombre del estado" style={{ ...inp, flex: 1, minWidth: 100 }} />
+                  <input value={newStateName} onChange={e => setNewStateName(e.target.value)} placeholder={t("settings.addStatePlaceholder")} style={{ ...inp, flex: 1, minWidth: 100 }} />
                   <select value={newStatePhase} onChange={e => setNewStatePhase(e.target.value as "pre" | "work" | "post")} style={{ ...inp, width: "auto" }}>
-                    {Object.entries(PHASE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    {Object.entries(PHASE_META).map(([k, v]) => <option key={k} value={k}>{t(v.labelKey)}</option>)}
                   </select>
-                  <Btn variant="primary" onClick={addState}>AÃ±adir</Btn>
+                  <Btn variant="primary" onClick={addState}>{t("settings.add")}</Btn>
                 </div>
               </div>
             </div>
           )}
 
-          {/* â”€â”€ COLUMNAS â”€â”€ */}
+          {/* Columnas */}
           {section === "columnas" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
-                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Columnas</h2>
-                <Btn variant="primary" onClick={addColumn}>+ AÃ±adir</Btn>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("settings.columnsTitle")}</h2>
+                <Btn variant="primary" onClick={addColumn}>{t("settings.addColumn")}</Btn>
               </div>
               {unassigned.length > 0 && (
                 <div style={{ backgroundColor: "#FAEEDA", border: "1.5px solid #EF9F27", borderRadius: 11, padding: "10px 14px", marginBottom: 14 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#633806", fontFamily: FONT }}>âš  Estados sin columna: </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#633806", fontFamily: FONT }}>{t("settings.unassignedStates")} </span>
                   <span style={{ fontSize: 12, color: "#633806", fontFamily: FONT }}>{unassigned.map(s => s.name).join(", ")}</span>
                 </div>
               )}
@@ -516,28 +527,28 @@ export function SettingsPage({
                 return (
                   <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `2px solid ${cc}55`, overflow: "hidden", marginBottom: 10, cursor: "grab" }}>
                     <div style={{ background: cc, padding: "8px 13px", display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>â ¿</span>
+                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>≡</span>
                       <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: FONT, flex: 1 }}>{c.name}</span>
                       <select value={c.phase} onChange={e => updateCol(c.id, { phase: e.target.value as "pre" | "work" | "post" })}
                         style={{ fontSize: 11, borderRadius: 7, border: "none", padding: "2px 6px", backgroundColor: "rgba(255,255,255,0.2)", color: "#fff", fontFamily: FONT, cursor: "pointer", outline: "none" }}>
-                        {Object.entries(PHASE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                        {Object.entries(PHASE_META).map(([k, v]) => <option key={k} value={k}>{t(v.labelKey)}</option>)}
                       </select>
                     </div>
                     <div style={{ padding: "11px 13px", display: "flex", flexDirection: "column", gap: 10 }}>
                       <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
                         <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 3 }}>Nombre</label>
+                          <label style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 3 }}>{t("settings.nameLabel")}</label>
                           <input value={c.name} onChange={e => updateCol(c.id, { name: e.target.value })} style={{ ...inp, width: "100%" }} />
                         </div>
                         <div>
-                          <label style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 3 }}>LÃ­mite WIP</label>
+                          <label style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 3 }}>{t("settings.wipLimit")}</label>
                           <input type="number" min={0} value={c.wip_limit || 0}
                             onChange={e => updateCol(c.id, { wip_limit: Math.max(0, parseInt(e.target.value) || 0) })}
                             style={{ ...inp, width: 65, textAlign: "center" }} />
                         </div>
                       </div>
                       <div>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 5 }}>Estados asignados</label>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 5 }}>{t("settings.assignedStates")}</label>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                           {states.map(s => {
                             const assigned = (c.state_ids || []).includes(s.id);
@@ -554,10 +565,10 @@ export function SettingsPage({
                       <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                         <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, fontFamily: FONT, color: T.text, fontWeight: 600 }}>
                           <input type="checkbox" checked={!!c.is_wip} onChange={e => updateCol(c.id, { is_wip: e.target.checked })} />
-                          Es WIP
+                          {t("settings.isWip")}
                         </label>
                         {columns.length > 1 && (
-                          <Btn variant="danger" onClick={() => removeCol(c.id)} style={{ fontSize: 11, padding: "3px 9px" }}>Eliminar</Btn>
+                          <Btn variant="danger" onClick={() => removeCol(c.id)} style={{ fontSize: 11, padding: "3px 9px" }}>{t("settings.remove")}</Btn>
                         )}
                       </div>
                     </div>
@@ -567,29 +578,29 @@ export function SettingsPage({
             </div>
           )}
 
-          {/* â”€â”€ CATEGORIAS â”€â”€ */}
+          {/* Categorias */}
           {section === "categorias" && (
             <div>
-              <h2 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>CategorÃ­as</h2>
+              <h2 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("settings.categoriesTitle")}</h2>
               <DragList items={board.categories} keyFn={c => c} onReorder={reorderCats} renderItem={c => (
                 <div style={{ backgroundColor: T.bg, borderRadius: 10, border: `1.5px solid ${T.border}`, padding: "9px 13px", display: "flex", alignItems: "center", gap: 9, marginBottom: 6, cursor: "grab" }}>
-                  <span style={{ fontSize: 14, color: T.textSoft }}>â ¿</span>
+                  <span style={{ fontSize: 14, color: T.textSoft }}>≡</span>
                   <span style={{ flex: 1, fontSize: 13, fontFamily: FONT, color: T.text }}>{c}</span>
-                  <Btn variant="danger" onClick={() => removeCat(c)} style={{ fontSize: 11, padding: "3px 8px" }}>âœ•</Btn>
+                  <Btn variant="danger" onClick={() => removeCat(c)} style={{ fontSize: 11, padding: "3px 8px" }}>×</Btn>
                 </div>
               )} />
               <div style={{ display: "flex", gap: 7, marginTop: 8 }}>
-                <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Nueva categorÃ­a..." style={{ ...inp, flex: 1 }} />
-                <Btn variant="primary" onClick={addCat}>AÃ±adir</Btn>
+                <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder={t("settings.addCategoryPlaceholder")} style={{ ...inp, flex: 1 }} />
+                <Btn variant="primary" onClick={addCat}>{t("settings.add")}</Btn>
               </div>
             </div>
           )}
 
-          {/* â”€â”€ CAMPOS â”€â”€ */}
+          {/* Campos */}
           {section === "campos" && (
             <div>
-              <h2 style={{ margin: "0 0 5px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Campos visibles en el modal</h2>
-              <p style={{ margin: "0 0 16px", fontSize: 12, color: T.textSoft, fontFamily: FONT }}>TÃ­tulo, estado, descripciÃ³n y creador siempre visibles.</p>
+              <h2 style={{ margin: "0 0 5px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("settings.modalFieldsTitle")}</h2>
+              <p style={{ margin: "0 0 16px", fontSize: 12, color: T.textSoft, fontFamily: FONT }}>{t("settings.fieldsAlwaysVisible")}</p>
               {OPT_FIELDS.map(f => (
                 <div key={f.id} style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${T.border}`, padding: "11px 15px", display: "flex", alignItems: "center", gap: 11, marginBottom: 7 }}>
                   <Toggle on={(board.visible_fields || []).includes(f.id)} onChange={v => toggleField(f.id, v)} />
@@ -599,13 +610,13 @@ export function SettingsPage({
             </div>
           )}
 
-          {/* â”€â”€ ACCESO â”€â”€ */}
+          {/* Acceso */}
           {section === "acceso" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Acceso al tablero</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("settings.accessTitle")}</h2>
               {([
-                { key: "public" as const, label: "Acceso pÃºblico por URL", desc: "Cualquier persona con el enlace puede ver el tablero." },
-                { key: "requireLogin" as const, label: "Requiere autenticaciÃ³n", desc: "Solo miembros autenticados con acceso pueden entrar." },
+                { key: "public" as const, label: t("settings.accessPublicLabel"), desc: t("settings.accessPublicDesc") },
+                { key: "requireLogin" as const, label: t("settings.accessRequireLabel"), desc: t("settings.accessRequireDesc") },
               ]).map(opt => (
                 <div key={opt.key} onClick={() => updateBoardConfig({ [opt.key]: !board.board_config?.[opt.key] })}
                   style={{ backgroundColor: T.bg, borderRadius: 13, border: `2px solid ${board.board_config?.[opt.key] ? T.accent : T.border}`, padding: "13px 15px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, marginBottom: 9 }}>
@@ -617,11 +628,11 @@ export function SettingsPage({
                 </div>
               ))}
               <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: "13px 15px", marginTop: 4 }}>
-                <p style={{ margin: "0 0 9px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>Ocultar tareas completadas</p>
+                <p style={{ margin: "0 0 9px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>{t("settings.hideDone")}</p>
                 <select value={board.board_config?.hideDoneAfterDays || 0}
                   onChange={e => updateBoardConfig({ hideDoneAfterDays: parseInt(e.target.value) || 0 })}
                   style={{ fontFamily: FONT, fontSize: 13, borderRadius: 8, border: `1.5px solid ${T.border}`, padding: "8px 10px", backgroundColor: T.bgSoft, color: T.text, outline: "none", width: "100%" }}>
-                  {HIDE_DONE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {hideDoneOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
             </div>
