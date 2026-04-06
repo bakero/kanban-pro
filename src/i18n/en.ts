@@ -85,6 +85,8 @@
   "board.legend.post": "Post-work",
   "board.noCards": "No cards",
   "board.wipLimit": "LIMIT",
+  "board.categoryFrontend": "Frontend",
+  "board.categoryBackend": "Backend",
 
   "task.type.tarea": "Task",
   "task.type.epica": "Epic",
@@ -302,7 +304,7 @@
   "legal.section.security": "Security",
   "legal.section.contact": "Contact",
   "legal.placeholder": "[To be completed by the company]",
-  "legal.cookiesPlaceholder": "Technical cookies: [Supabase Auth], [Vercel], [Analytics]. Fill in name, provider, purpose, and duration.",
+  "legal.cookiesPlaceholder": "Technical cookies: [Supabase Auth], [Vercel]. Add analytics if enabled. Fill in name, provider, purpose, and duration.",
   "legal.footer.notice": "Legal notice",
   "legal.footer.privacy": "Privacy",
   "legal.footer.cookies": "Cookies",

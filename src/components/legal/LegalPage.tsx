@@ -62,18 +62,10 @@ export function LegalPage() {
             <div key={section.id} style={{ padding: "16px 18px", borderRadius: 16, border: `1px solid ${T.border}`, background: T.bgSidebar }}>
               <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>{section.label}</h3>
               <p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: T.textSoft }}>
-                {t("legal.placeholder")}
+                {section.id === "cookies" && kind === "cookies" ? t("legal.cookiesPlaceholder") : t("legal.placeholder")}
               </p>
             </div>
           ))}
-          {kind === "cookies" && (
-            <div style={{ padding: "16px 18px", borderRadius: 16, border: `1px solid ${T.border}`, background: T.bgSidebar }}>
-              <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>{t("legal.section.cookies")}</h3>
-              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: T.textSoft }}>
-                {t("legal.cookiesPlaceholder")}
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>

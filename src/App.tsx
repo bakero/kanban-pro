@@ -800,7 +800,7 @@ export default function App() {
       owner_user_id: boardOwner,
       board_config: { public: false, requireLogin: true, hideDoneAfterDays: 0 },
       visible_fields: [],
-      categories: mode === "copy" ? [...(board?.categories || [])] : ["Frontend", "Backend"],
+      categories: mode === "copy" ? [...(board?.categories || [])] : [t("board.categoryFrontend"), t("board.categoryBackend")],
       created_at: new Date().toISOString(),
       sort_order: boards.length,
     } as unknown as Board;
