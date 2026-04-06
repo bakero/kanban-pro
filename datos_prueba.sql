@@ -139,10 +139,21 @@ ON CONFLICT (key) DO NOTHING;
 -- ============================================================
 INSERT INTO company_features (id, company_id, feature_key, is_enabled, updated_by, updated_at)
 VALUES
-  ('cf-acme-filters',   'comp-acme', 'filters',       TRUE,  'user-acme-admin', NOW()),
-  ('cf-acme-deps',      'comp-acme', 'dependencies',  TRUE,  'user-acme-admin', NOW()),
-  ('cf-beta-filters',   'comp-beta', 'filters',       FALSE, 'user-beta-admin', NOW()),
-  ('cf-beta-metrics',   'comp-beta', 'metrics',       TRUE,  'user-beta-admin', NOW())
+  ('cf-acme-filters',      'comp-acme', 'filters',               TRUE,  'user-acme-admin', NOW()),
+  ('cf-acme-deps',         'comp-acme', 'dependencies',          TRUE,  'user-acme-admin', NOW()),
+  ('cf-acme-types',        'comp-acme', 'card_types',            TRUE,  'user-acme-admin', NOW()),
+  ('cf-acme-categories',   'comp-acme', 'categories',            TRUE,  'user-acme-admin', NOW()),
+  ('cf-acme-workspaces',   'comp-acme', 'workspaces',            TRUE,  'user-acme-admin', NOW()),
+  ('cf-acme-metrics-bu',   'comp-acme', 'metrics_burnup',        TRUE,  'user-acme-admin', NOW()),
+  ('cf-acme-metrics-bd',   'comp-acme', 'metrics_burndown',      TRUE,  'user-acme-admin', NOW()),
+  ('cf-acme-admin',        'comp-acme', 'company_admin_console', TRUE,  'user-acme-admin', NOW()),
+  ('cf-acme-logs',         'comp-acme', 'logs_backups',          TRUE,  'user-acme-admin', NOW()),
+  ('cf-acme-auth',         'comp-acme', 'auth_isolation',        TRUE,  'user-acme-admin', NOW()),
+  ('cf-beta-filters',      'comp-beta', 'filters',               FALSE, 'user-beta-admin', NOW()),
+  ('cf-beta-deps',         'comp-beta', 'dependencies',          FALSE, 'user-beta-admin', NOW()),
+  ('cf-beta-workspaces',   'comp-beta', 'workspaces',            FALSE, 'user-beta-admin', NOW()),
+  ('cf-beta-admin',        'comp-beta', 'company_admin_console', FALSE, 'user-beta-admin', NOW()),
+  ('cf-beta-logs',         'comp-beta', 'logs_backups',          FALSE, 'user-beta-admin', NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
@@ -420,4 +431,5 @@ VALUES
   ('backup-acme-2', 'comp-acme', 'user-acme-admin', 'Backup previo demo', '{"boards":["board-acme-main"]}', NOW() - interval '1 day'),
   ('backup-beta-1', 'comp-beta', 'user-beta-admin', 'Backup inicial', '{"boards":["board-beta-main"]}', NOW() - interval '5 days')
 ON CONFLICT (id) DO NOTHING;
+
 
