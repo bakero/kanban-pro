@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { FONT, PHASE_COLORS } from "./constants";
+import { FONT, PHASE_COLORS, SUPER_ADMIN_EMAIL } from "./constants";
 import { ThemeContext, ThemeModeContext, resolveTheme, usePrefersDark } from "./hooks/useTheme";
 import type { ThemeMode } from "./hooks/useTheme";
 import {
@@ -38,6 +38,7 @@ import { KCard } from "./components/KCard";
 import { LoginPage } from "./components/LoginPage";
 import { NewKanbanModal } from "./components/NewKanbanModal";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { SuperAdminPage } from "./components/admin/SuperAdminPage";
 import type {
   Board,
   BoardColumn,
@@ -55,7 +56,7 @@ import type {
   Workspace,
 } from "./types";
 
-type AppPage = "board" | "settings" | "improvements";
+type AppPage = "board" | "settings" | "improvements" | "admin";
 
 export default function App() {
   const prefersDark = usePrefersDark();
@@ -596,9 +597,25 @@ export default function App() {
     );
   }
 
+  const isSuperAdmin = currentUser?.email === SUPER_ADMIN_EMAIL;
+
+  if (page === "admin" && isSuperAdmin && currentUser) {
+    return withTheme(<SuperAdminPage currentUser={currentUser} onBack={() => setPage("board")} />);
+  }
+
   if (!company) {
     return withTheme(
       <div style={{ minHeight: "100vh", background: T.bgSoft, padding: 24, fontFamily: FONT }}>
+        {isSuperAdmin && (
+          <div style={{ marginBottom: 24 }}>
+            <button
+              onClick={() => setPage("admin")}
+              style={{ fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 12, border: `1px solid ${T.accent}`, backgroundColor: T.accentSoft, color: T.accent, cursor: "pointer" }}
+            >
+              ◈ Abrir consola de administración
+            </button>
+          </div>
+        )}
         <p style={{ color: T.text, fontWeight: 700 }}>No tienes una empresa asignada.</p>
         <p style={{ color: T.textSoft, fontSize: 13 }}>Contacta con el administrador para recibir acceso.</p>
       </div>,
@@ -782,6 +799,11 @@ export default function App() {
           {featureFlags.improvements && (
             <button onClick={() => setPage("improvements")} style={{ fontSize: 12, fontWeight: 700, padding: "10px 12px", borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
               Mejoras
+            </button>
+          )}
+          {isSuperAdmin && (
+            <button onClick={() => setPage("admin")} style={{ fontSize: 12, fontWeight: 700, padding: "10px 12px", borderRadius: 12, border: `1px solid ${T.accent}`, backgroundColor: T.accentSoft, color: T.accent, cursor: "pointer" }}>
+              ◈ Admin
             </button>
           )}
           <button onClick={() => setPage("settings")} style={{ fontSize: 12, fontWeight: 700, padding: "10px 12px", borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
