@@ -1,5 +1,5 @@
--- ============================================================
--- KANBAN PRO — Schema completo
+﻿-- ============================================================
+-- KANBAN PRO â€” Schema completo
 -- Ejecutar en Supabase SQL Editor (Fresh install)
 -- ============================================================
 
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- ============================================================
--- COMPANIES  (tenant raíz — cada empresa compra una licencia)
+-- COMPANIES  (tenant raÃ­z â€” cada empresa compra una licencia)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS companies (
   id                  TEXT PRIMARY KEY,
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS company_settings (
 
 
 -- ============================================================
--- WORKSPACES  (espacios de trabajo — agrupan proyectos)
+-- WORKSPACES  (espacios de trabajo â€” agrupan proyectos)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS workspaces (
   id          TEXT PRIMARY KEY,
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
 );
 
 -- ============================================================
--- PROJECTS  (proyectos — agrupan tableros y configuran features)
+-- PROJECTS  (proyectos â€” agrupan tableros y configuran features)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS projects (
   id           TEXT PRIMARY KEY,
@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS project_members (
 );
 
 -- ============================================================
--- FEATURES CATALOG  (catálogo global gestionado por super admin)
+-- FEATURES CATALOG  (catÃ¡logo global gestionado por super admin)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS features (
   id           TEXT PRIMARY KEY,
@@ -134,17 +134,23 @@ CREATE TABLE IF NOT EXISTS features (
   sort_order   INTEGER NOT NULL DEFAULT 0
 );
 
--- Seed del catálogo de funcionalidades
+-- Seed del catÃ¡logo de funcionalidades
 INSERT INTO features (id, key, label, description, default_on, is_mandatory, sort_order)
 VALUES
-  ('feat-metrics',      'metrics',        'Métricas',               'Lead time, cycle time y throughput',   TRUE,  FALSE, 0),
-  ('feat-improvements', 'improvements',   'Mejoras',                'Backlog de mejoras con votación',       TRUE,  FALSE, 1),
-  ('feat-wip',          'wip',            'Control WIP',            'Límites WIP en columnas',               TRUE,  FALSE, 2),
-  ('feat-timecol',      'time_tracking',  'Tiempos por columna',    'Registro de tiempo por columna',        TRUE,  FALSE, 3),
-  ('feat-filters',      'filters',        'Filtros',                'Filtros de tarjetas',                   TRUE,  FALSE, 4),
-  ('feat-deps',         'dependencies',   'Dependencias',           'Relaciones entre tarjetas',             TRUE,  FALSE, 5),
-  ('feat-types',        'card_types',     'Tipos de trabajo',       'Épica, iniciativa, bug, tarea',         TRUE,  FALSE, 6),
-  ('feat-categories',   'categories',     'Categorías',             'Categorización de tarjetas',            TRUE,  FALSE, 7)
+  ('feat-metrics',         'metrics',               'Metricas minimas',        'Lead time, cycle time, throughput, WIP global y tiempos por columna', TRUE,  TRUE,  0),
+  ('feat-metrics-burnup',  'metrics_burnup',        'Burnup chart',            'Grafico avanzado de progreso',                                       FALSE, FALSE, 1),
+  ('feat-metrics-burndown','metrics_burndown',      'Burndown chart',          'Grafico avanzado de progreso',                                       FALSE, FALSE, 2),
+  ('feat-improvements',    'improvements',          'Mejoras',                 'Backlog de mejoras con votacion',                                    TRUE,  TRUE,  3),
+  ('feat-wip',             'wip',                   'Control WIP',             'Limites WIP en columnas',                                            TRUE,  TRUE,  4),
+  ('feat-timecol',         'time_tracking',         'Tiempos por columna',     'Registro de tiempo por columna',                                     TRUE,  TRUE,  5),
+  ('feat-filters',         'filters',               'Filtros',                 'Filtros de tarjetas',                                                TRUE,  TRUE,  6),
+  ('feat-deps',            'dependencies',          'Dependencias',            'Relaciones entre tarjetas',                                          FALSE, FALSE, 7),
+  ('feat-types',           'card_types',            'Tipos de trabajo',        'Epica, iniciativa, bug, tarea',                                      FALSE, FALSE, 8),
+  ('feat-categories',      'categories',            'Categorias',              'Categorizacion de tarjetas',                                         FALSE, FALSE, 9),
+  ('feat-workspaces',      'workspaces',            'Workspaces',              'Empresa -> Workspace -> Proyecto',                                  FALSE, FALSE, 10),
+  ('feat-company-admin',   'company_admin_console', 'Consola empresa',         'Consola administrativa por empresa con trazas',                      FALSE, FALSE, 11),
+  ('feat-logs-backups',    'logs_backups',          'Logs y backups',           'Trazas y backups por empresa',                                       FALSE, FALSE, 12),
+  ('feat-auth',            'auth_isolation',        'Auth y aislamiento',      'Autenticacion y aislamiento por empresa',                            FALSE, FALSE, 13)
 ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
@@ -174,7 +180,7 @@ CREATE TABLE IF NOT EXISTS project_features (
 );
 
 -- ============================================================
--- BOARDS  (tableros — pertenecen a un proyecto)
+-- BOARDS  (tableros â€” pertenecen a un proyecto)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS boards (
   id              TEXT PRIMARY KEY,
@@ -260,6 +266,20 @@ CREATE TABLE IF NOT EXISTS board_logs (
 );
 
 -- ============================================================
+-- COMPANY ADMIN LOGS  (trazas de acciones en consola de empresa)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS company_admin_logs (
+  id          TEXT PRIMARY KEY,
+  company_id  TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  user_id     TEXT NOT NULL REFERENCES users(id),
+  action      TEXT NOT NULL,
+  entity_type TEXT,
+  entity_id   TEXT,
+  details     JSONB,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
 -- COMPANY BACKUPS  (snapshot del estado de la empresa)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS company_backups (
@@ -272,7 +292,7 @@ CREATE TABLE IF NOT EXISTS company_backups (
 );
 
 -- ============================================================
--- IMPROVEMENTS  (mejoras — scoped a proyecto, con contexto de tablero)
+-- IMPROVEMENTS  (mejoras â€” scoped a proyecto, con contexto de tablero)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS improvements (
   id          TEXT PRIMARY KEY,
@@ -300,3 +320,4 @@ CREATE TABLE IF NOT EXISTS improvement_votes (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(improvement_id, user_id)
 );
+

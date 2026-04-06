@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+﻿import { useState, useRef } from "react";
 import { FONT, TASK_TYPES, PHASE_COLORS } from "../constants";
 import { useTheme } from "../hooks/useTheme";
 import { uid, nowStr, formatDur, histEntry } from "../lib/utils";
@@ -9,7 +9,7 @@ import { FieldRow } from "./ui/FieldRow";
 import { Avatar } from "./ui/Avatar";
 import { JustifyModal } from "./JustifyModal";
 import { ImprovementBtn } from "./ImprovementBtn";
-import type { Card, Board, BoardColumn, BoardState, User } from "../types";
+import type { Card, Board, BoardColumn, BoardState, FeatureFlags, User } from "../types";
 
 interface CardModalProps {
   card: Card;
@@ -20,6 +20,7 @@ interface CardModalProps {
   currentUser: User;
   companyId: string;
   showImprovements: boolean;
+  featureFlags?: FeatureFlags;
   allCards: Card[];
   categories: string[];
   onClose: () => void;
@@ -29,7 +30,7 @@ interface CardModalProps {
 }
 
 export function CardModal({
-  card, board, columns, states, users, currentUser, companyId, showImprovements, allCards, categories,
+  card, board, columns, states, users, currentUser, companyId, showImprovements, featureFlags, allCards, categories,
   onClose, onSave, onSaveCat, onOpenCard,
 }: CardModalProps) {
   const T = useTheme();
@@ -46,6 +47,9 @@ export function CardModal({
   const creator    = users.find(u => u.id === data.creator_id);
   const curState   = states.find(s => s.id === data.state_id);
   const isDiscard  = curState?.name?.toLowerCase().includes("descart");
+  const canDeps = featureFlags?.dependencies !== false;
+  const canTypes = featureFlags?.card_types !== false;
+  const canCats = featureFlags?.categories !== false;
 
   const inp: React.CSSProperties = {
     fontFamily: FONT, fontSize: 13, borderRadius: 10,
@@ -57,11 +61,11 @@ export function CardModal({
   function field(key: keyof Card, val: unknown) {
     if (data[key] === val) return;
     setDirty(true);
-    setData(d => ({ ...d, [key]: val, history: [...d.history, histEntry(`"${String(key)}" → "${String(val)}"`, activeUser)] }));
+    setData(d => ({ ...d, [key]: val, history: [...d.history, histEntry(`"${String(key)}" â†’ "${String(val)}"`, activeUser)] }));
   }
 
   function requestClose() {
-    if (!dirty || window.confirm("Hay cambios sin guardar. ¿Deseas salir sin guardar los cambios?")) {
+    if (!dirty || window.confirm("Hay cambios sin guardar. Â¿Deseas salir sin guardar los cambios?")) {
       onClose();
     }
   }
@@ -79,8 +83,8 @@ export function CardModal({
   function applyState(stateId: string, colId: string, reason: string | null) {
     const ns = states.find(s => s.id === stateId);
     const hist = [...data.history];
-    if (reason) hist.push(histEntry(`Justificación: ${reason}`, activeUser));
-    hist.push(histEntry(`Estado → "${ns?.name}"`, activeUser));
+    if (reason) hist.push(histEntry(`JustificaciÃ³n: ${reason}`, activeUser));
+    hist.push(histEntry(`Estado â†’ "${ns?.name}"`, activeUser));
     setData(d => ({
       ...d, stateId, state_id: stateId, col_id: colId,
       completed_at: ns?.phase === "post" && !ns?.is_discard ? new Date().toISOString() : (ns?.phase !== "post" ? null : d.completed_at),
@@ -95,7 +99,7 @@ export function CardModal({
     setData(d => ({
       ...d,
       comments: [...d.comments, { id: uid(), author: activeUser?.name || "Usuario", ts: nowStr(), text: comment.trim() }],
-      history: [...d.history, histEntry("Comentario añadido", activeUser)],
+      history: [...d.history, histEntry("Comentario aÃ±adido", activeUser)],
     }));
     setComment("");
   }
@@ -126,7 +130,7 @@ export function CardModal({
 
   const allTabs = [
     { id: "detalle",      label: "Detalle",     always: true },
-    { id: "dependencias", label: "Dependencias"              },
+    ...(canDeps ? [{ id: "dependencias", label: "Dependencias" }] : []),
     { id: "comentarios",  label: "Comentarios", count: data.comments.length },
     { id: "archivos",     label: "Archivos",    count: data.attachments.length },
     { id: "tiempos",      label: "Tiempos"                  },
@@ -181,7 +185,7 @@ export function CardModal({
                 />
               )}
               <Btn variant="primary" onClick={() => onSave(data)}>Guardar</Btn>
-              <Btn variant="outline" onClick={requestClose} style={{ padding: "7px 11px" }}>✕</Btn>
+              <Btn variant="outline" onClick={requestClose} style={{ padding: "7px 11px" }}>âœ•</Btn>
             </div>
           </div>
           {/* Tabs */}
@@ -209,7 +213,7 @@ export function CardModal({
 
           {tab === "detalle" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {(board.visible_fields || []).includes("tipo") && (
+              {canTypes && (board.visible_fields || []).includes("tipo") && (
                 <FieldRow label="Tipo">
                   <select value={data.type} onChange={e => field("type", e.target.value)} style={inp}>
                     {Object.entries(TASK_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -221,19 +225,19 @@ export function CardModal({
                   {states.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </FieldRow>
-              {(board.visible_fields || []).includes("categoria") && (
-                <FieldRow label="Categoría">
+              {canCats && (board.visible_fields || []).includes("categoria") && (
+                <FieldRow label="CategorÃ­a">
                   {addingCat ? (
                     <div style={{ display: "flex", gap: 6, flex: 1 }}>
-                      <input value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Nueva categoría..." style={{ ...inp, flex: 1 }} autoFocus
+                      <input value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Nueva categorÃ­a..." style={{ ...inp, flex: 1 }} autoFocus
                         onKeyDown={e => { if (e.key === "Enter" && newCat.trim()) { onSaveCat(newCat.trim()); field("category", newCat.trim()); setAddingCat(false); setNewCat(""); } }} />
                       <Btn variant="primary" onClick={() => { if (newCat.trim()) { onSaveCat(newCat.trim()); field("category", newCat.trim()); setAddingCat(false); setNewCat(""); } }} style={{ padding: "6px 10px", fontSize: 12 }}>OK</Btn>
-                      <Btn variant="ghost" onClick={() => setAddingCat(false)} style={{ padding: "6px 8px" }}>✕</Btn>
+                      <Btn variant="ghost" onClick={() => setAddingCat(false)} style={{ padding: "6px 8px" }}>âœ•</Btn>
                     </div>
                   ) : (
                     <select value={data.category} onChange={e => { if (e.target.value === "__new__") { setAddingCat(true); } else { field("category", e.target.value); } }} style={inp}>
                       {categories.map(c => <option key={c}>{c}</option>)}
-                      <option value="__new__">+ Añadir categoría...</option>
+                      <option value="__new__">+ AÃ±adir categorÃ­a...</option>
                     </select>
                   )}
                 </FieldRow>
@@ -253,11 +257,11 @@ export function CardModal({
                   <Toggle on={data.blocked} onChange={v => {
                     setData(d => ({ ...d, blocked: v, history: [...d.history, histEntry(`Bloqueado ${v ? "activado" : "desactivado"}`, activeUser)] }));
                   }} />
-                  <span style={{ fontSize: 13, fontFamily: FONT, color: T.text, marginLeft: 10 }}>{data.blocked ? "Sí" : "No"}</span>
+                  <span style={{ fontSize: 13, fontFamily: FONT, color: T.text, marginLeft: 10 }}>{data.blocked ? "SÃ­" : "No"}</span>
                 </FieldRow>
               )}
               <div>
-                <span style={{ fontSize: 12, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 6 }}>Descripción</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 6 }}>DescripciÃ³n</span>
                 <textarea value={data.description} onChange={e => field("description", e.target.value)} rows={3}
                   style={{ ...inp, resize: "vertical", lineHeight: 1.6 }} />
               </div>
@@ -273,7 +277,7 @@ export function CardModal({
           {tab === "dependencias" && (
             <div>
               {(["depends_on", "blocked_by"] as const).map(key => {
-                const label = key === "depends_on" ? "Dependo de" : "Dependen de mí";
+                const label = key === "depends_on" ? "Dependo de" : "Dependen de mÃ­";
                 const hint  = key === "depends_on" ? "Esta tarea espera a que las siguientes terminen." : "Las siguientes esperan a que esta termine.";
                 return (
                   <div key={key} style={{ marginBottom: 20 }}>
@@ -292,7 +296,7 @@ export function CardModal({
                           backgroundColor: T.bgSoft, borderRadius: 10, padding: "8px 12px", marginBottom: 6,
                           border: `1.5px solid ${resolved ? "#1D9E75" : "#E24B4A"}44`,
                         }}>
-                          <span style={{ color: resolved ? "#1D9E75" : "#E24B4A", fontSize: 13, fontWeight: 700 }}>{resolved ? "✓" : "⏳"}</span>
+                          <span style={{ color: resolved ? "#1D9E75" : "#E24B4A", fontSize: 13, fontWeight: 700 }}>{resolved ? "âœ“" : "â³"}</span>
                           <TypeIcon type={dep.type} size={13} />
                           <span style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT }}>{dep.card_id}</span>
                           <span onClick={() => onOpenCard(dep.id)} style={{ fontSize: 13, fontFamily: FONT, color: "#7F77DD", flex: 1, cursor: "pointer", textDecoration: "underline" }}>
@@ -301,7 +305,7 @@ export function CardModal({
                           <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 20, background: resolved ? "#E1F5EE" : "#FCEBEB", color: resolved ? "#085041" : "#c0392b", fontFamily: FONT, fontWeight: 700 }}>
                             {resolved ? "Resuelta" : "Pendiente"}
                           </span>
-                          <button onClick={() => removeDep(depId, key)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textSoft, fontSize: 14 }}>✕</button>
+                          <button onClick={() => removeDep(depId, key)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textSoft, fontSize: 14 }}>âœ•</button>
                         </div>
                       );
                     })}
@@ -323,7 +327,7 @@ export function CardModal({
                             <TypeIcon type={c.type} size={13} />
                             <span style={{ fontSize: 11, color: T.textSoft, fontFamily: FONT, fontWeight: 600 }}>{c.card_id}</span>
                             <span style={{ fontSize: 13, fontFamily: FONT, color: T.text, flex: 1 }}>{c.title}</span>
-                                {c.completed_at && <span style={{ fontSize: 10, color: "#1D9E75" }}>✓</span>}
+                                {c.completed_at && <span style={{ fontSize: 10, color: "#1D9E75" }}>âœ“</span>}
                               </div>
                             ))}
                           </div>
@@ -355,7 +359,7 @@ export function CardModal({
                 <input value={comment} onChange={e => setComment(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && addComment()}
                   placeholder="Escribe un comentario..." style={{ ...inp, flex: 1 }} />
-                <Btn variant="primary" onClick={addComment} style={{ whiteSpace: "nowrap" }}>Añadir</Btn>
+                <Btn variant="primary" onClick={addComment} style={{ whiteSpace: "nowrap" }}>AÃ±adir</Btn>
               </div>
             </div>
           )}
@@ -367,7 +371,7 @@ export function CardModal({
               )}
               {data.attachments.map((a, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, backgroundColor: T.bgSoft, borderRadius: 10, padding: "9px 12px", marginBottom: 7, border: `1px solid ${T.border}` }}>
-                  <span style={{ fontSize: 15 }}>📄</span>
+                  <span style={{ fontSize: 15 }}>ðŸ“„</span>
                   <span style={{ fontSize: 13, fontFamily: FONT, color: T.text }}>{a}</span>
                 </div>
               ))}
@@ -429,7 +433,7 @@ export function CardModal({
                       <p style={{ fontSize: 13, margin: "0 0 3px", fontFamily: FONT, color: T.text, lineHeight: 1.5 }}>{h.msg}</p>
                       <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                         {u && <Avatar user={u} size={16} />}
-                        <span style={{ fontSize: 11, color: T.textSoft, fontFamily: FONT }}>{h.userName || "Sistema"} · {h.ts}</span>
+                        <span style={{ fontSize: 11, color: T.textSoft, fontFamily: FONT }}>{h.userName || "Sistema"} Â· {h.ts}</span>
                       </div>
                     </div>
                   </div>
@@ -443,3 +447,4 @@ export function CardModal({
     </div>
   );
 }
+

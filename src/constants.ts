@@ -3,9 +3,9 @@ export const FONT = "'Plus Jakarta Sans', 'Inter Tight', sans-serif";
 export const SUPER_ADMIN_EMAIL = "bkasero@gmail.com";
 
 export const PHASE_COLORS: Record<string, string> = {
-  pre:  "#888780",
-  work: "#378ADD",
-  post: "#1D9E75",
+  pre:  "#8A94A6",
+  work: "#3E7BFA",
+  post: "#27A376",
 };
 
 export const TASK_TYPES = {

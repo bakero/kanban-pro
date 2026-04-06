@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { FONT, PHASE_COLORS, PHASE_META, HIDE_DONE_OPTIONS, SUPER_ADMIN_EMAIL } from "../../constants";
 import { useTheme, useThemeMode } from "../../hooks/useTheme";
 import { uid } from "../../lib/utils";
@@ -65,8 +65,9 @@ export function SettingsPage({
   const { mode, setMode } = useThemeMode();
   const canManageProject = myRole === "company_admin" || myProjectRole === "project_manager";
   const canManageCompany = myRole === "company_admin";
+  const showLogsBackups = featureFlags.logs_backups !== false;
   const [section, setSection] = useState(
-    canManageCompany ? "empresa" : (activeProjectId ? "miembros" : "estados")
+    canManageCompany && showLogsBackups ? "empresa" : (activeProjectId ? "miembros" : "estados")
   );
   const [newStateName, setNewStateName] = useState("");
   const [newStatePhase, setNewStatePhase] = useState<"pre" | "work" | "post">("pre");
@@ -87,24 +88,24 @@ export function SettingsPage({
   };
 
   const sections = [
-    ...(canManageCompany ? [{ id: "empresa", label: "Empresa" }] : []),
+    ...(canManageCompany && showLogsBackups ? [{ id: "empresa", label: "Empresa" }] : []),
     ...(activeProjectId ? [
       { id: "miembros", label: "Miembros" },
       { id: "funcionalidades", label: "Funcionalidades" },
     ] : []),
     { id: "estados", label: "Estados" },
     { id: "columnas", label: "Columnas" },
-    { id: "categorias", label: "Categorías" },
+    ...(featureFlags.categories !== false ? [{ id: "categorias", label: "CategorÃ­as" }] : []),
     { id: "campos", label: "Campos del modal" },
     { id: "acceso", label: "Acceso" },
   ];
 
   const OPT_FIELDS = [
-    { id: "tipo", label: "Tipo" },
-    { id: "categoria", label: "Categoría" },
+    ...(featureFlags.card_types !== false ? [{ id: "tipo", label: "Tipo" }] : []),
+    ...(featureFlags.categories !== false ? [{ id: "categoria", label: "CategorÃ­a" }] : []),
     { id: "dueDate", label: "Fecha entrega" },
     { id: "bloqueado", label: "Bloqueado" },
-    { id: "dependencias", label: "Dependencias" },
+    ...(featureFlags.dependencies !== false ? [{ id: "dependencias", label: "Dependencias" }] : []),
     { id: "comentarios", label: "Comentarios" },
     { id: "archivos", label: "Archivos" },
     { id: "tiempos", label: "Tiempos" },
@@ -124,14 +125,14 @@ export function SettingsPage({
   async function handleAddMember() {
     const email = memberEmail.trim().toLowerCase();
     if (!email || !email.includes("@") || !activeProjectId) {
-      setMemberFeedback("Introduce un email válido.");
+      setMemberFeedback("Introduce un email vÃ¡lido.");
       return;
     }
     // Look up user by email
     const { supabase } = await import("../../lib/supabase");
     const { data: userRow } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
     if (!userRow) {
-      setMemberFeedback("No se encontró ningún usuario con ese email. El usuario debe haber iniciado sesión al menos una vez.");
+      setMemberFeedback("No se encontrÃ³ ningÃºn usuario con ese email. El usuario debe haber iniciado sesiÃ³n al menos una vez.");
       return;
     }
     const user = userRow as User;
@@ -140,7 +141,7 @@ export function SettingsPage({
     onUpdateProjectMembers([...projectMembers, newMember]);
     setMemberUsers(prev => prev.some(u => u.id === user.id) ? prev : [...prev, user]);
     setMemberEmail("");
-    setMemberFeedback(`${user.name} añadido como ${ROLE_LABELS[memberRole]}.`);
+    setMemberFeedback(`${user.name} aÃ±adido como ${ROLE_LABELS[memberRole]}.`);
   }
 
   async function handleRemoveMember(userId: string) {
@@ -220,6 +221,7 @@ export function SettingsPage({
   }
 
   function updateCompanySettings(partial: Partial<CompanySettings>) {
+    if (!showLogsBackups) return;
     const base: CompanySettings = companySettings || {
       company_id: company.id,
       log_retention_days: 30,
@@ -233,6 +235,7 @@ export function SettingsPage({
 
   async function handleCreateBackup() {
     if (!canManageCompany) return;
+    if (!showLogsBackups) return;
     const summary = companyBackupSummary.trim() || "Backup manual";
     await onCreateCompanyBackup(summary);
     setCompanyBackupSummary("");
@@ -243,11 +246,11 @@ export function SettingsPage({
     <div style={{ fontFamily: FONT, backgroundColor: T.bgSoft, minHeight: "100vh", position: "relative" }}>
       <div style={{ backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, padding: "14px 22px", display: "flex", alignItems: "center", gap: 14, backdropFilter: "blur(18px)" }}>
         <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: T.textSoft, padding: 0 }}>
-          ← Volver
+          â† Volver
         </button>
         <span style={{ color: T.border }}>|</span>
         <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.text, flex: 1 }}>
-          Configuración — {project ? `${project.name} / ` : ""}{board.title}
+          ConfiguraciÃ³n â€” {project ? `${project.name} / ` : ""}{board.title}
         </span>
         <select
           value={mode}
@@ -267,7 +270,7 @@ export function SettingsPage({
           </a>
         )}
         {featureFlags.improvements && (
-          <ImprovementBtn companyId={company.id} boardId={board.id} userId={currentUser.id} userName={currentUser.name} context="configuración" />
+          <ImprovementBtn companyId={company.id} boardId={board.id} userId={currentUser.id} userName={currentUser.name} context="configuraciÃ³n" />
         )}
       </div>
 
@@ -284,15 +287,15 @@ export function SettingsPage({
 
         <div style={{ flex: 1, padding: "22px 26px", overflowY: "auto" }}>
 
-          {/* ── EMPRESA ── */}
+          {/* â”€â”€ EMPRESA â”€â”€ */}
           {section === "empresa" && (
             <div>
               <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>
-                Configuración de empresa — {company.name}
+                ConfiguraciÃ³n de empresa â€” {company.name}
               </h2>
 
               <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>Retención de logs (días)</label>
+                <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>RetenciÃ³n de logs (dÃ­as)</label>
                 <input
                   type="number"
                   min={1}
@@ -300,7 +303,7 @@ export function SettingsPage({
                   onChange={e => updateCompanySettings({ log_retention_days: Math.max(1, parseInt(e.target.value) || 1) })}
                   style={{ ...inp, width: "100%", margin: "6px 0 12px" }}
                 />
-                <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>Retención de backups</label>
+                <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>RetenciÃ³n de backups</label>
                 <input
                   type="number"
                   min={1}
@@ -314,7 +317,7 @@ export function SettingsPage({
                     checked={companySettings?.backup_enabled ?? true}
                     onChange={e => updateCompanySettings({ backup_enabled: e.target.checked })}
                   />
-                  Backups automáticos activos
+                  Backups automÃ¡ticos activos
                 </label>
               </div>
 
@@ -339,7 +342,7 @@ export function SettingsPage({
                   Backups disponibles ({companyBackups.length})
                 </h3>
                 {companyBackups.length === 0 && (
-                  <p style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT }}>Sin backups aún.</p>
+                  <p style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT }}>Sin backups aÃºn.</p>
                 )}
                 {companyBackups.map(b => (
                   <div key={b.id} style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${T.border}`, padding: "9px 13px", marginBottom: 6 }}>
@@ -353,15 +356,15 @@ export function SettingsPage({
             </div>
           )}
 
-          {/* ── MIEMBROS ── */}
+          {/* â”€â”€ MIEMBROS â”€â”€ */}
           {section === "miembros" && activeProjectId && (
             <div>
               <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>
-                Miembros del proyecto{project ? ` — ${project.name}` : ""}
+                Miembros del proyecto{project ? ` â€” ${project.name}` : ""}
               </h2>
 
               {projectMembers.length === 0 && (
-                <p style={{ fontSize: 13, color: T.textSoft, fontFamily: FONT, fontStyle: "italic" }}>Sin miembros asignados aún.</p>
+                <p style={{ fontSize: 13, color: T.textSoft, fontFamily: FONT, fontStyle: "italic" }}>Sin miembros asignados aÃºn.</p>
               )}
 
               {projectMembers.map(member => {
@@ -394,7 +397,7 @@ export function SettingsPage({
 
               {canManageProject && (
                 <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginTop: 14 }}>
-                  <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>Añadir miembro</p>
+                  <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>AÃ±adir miembro</p>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <input value={memberEmail} onChange={e => setMemberEmail(e.target.value)}
                       placeholder="email@empresa.com" style={{ ...inp, flex: 1, minWidth: 160 }} />
@@ -404,7 +407,7 @@ export function SettingsPage({
                         <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                       ))}
                     </select>
-                    <Btn variant="primary" onClick={handleAddMember}>Añadir</Btn>
+                    <Btn variant="primary" onClick={handleAddMember}>AÃ±adir</Btn>
                   </div>
                   {!!memberFeedback && (
                     <p style={{ margin: "7px 0 0", fontSize: 11, color: T.success, fontFamily: FONT }}>{memberFeedback}</p>
@@ -414,7 +417,7 @@ export function SettingsPage({
             </div>
           )}
 
-          {/* ── FUNCIONALIDADES ── */}
+          {/* â”€â”€ FUNCIONALIDADES â”€â”€ */}
           {section === "funcionalidades" && activeProjectId && (
             <div>
               <h2 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Funcionalidades activas</h2>
@@ -424,7 +427,7 @@ export function SettingsPage({
               </p>
 
               {featureCatalog.length === 0 && (
-                // Fallback cuando no se ha cargado el catálogo: mostrar las flags actuales
+                // Fallback cuando no se ha cargado el catÃ¡logo: mostrar las flags actuales
                 Object.entries(featureFlags).map(([key, enabled]) => (
                   <div key={key} style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${T.border}`, padding: "11px 15px", display: "flex", alignItems: "center", gap: 11, marginBottom: 7 }}>
                     <Toggle on={enabled} onChange={v => canManageCompany && handleFeatureToggle(key, v)} />
@@ -453,7 +456,7 @@ export function SettingsPage({
             </div>
           )}
 
-          {/* ── ESTADOS ── */}
+          {/* â”€â”€ ESTADOS â”€â”€ */}
           {section === "estados" && (
             <div>
               <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Estados</h2>
@@ -476,35 +479,35 @@ export function SettingsPage({
                         <select value={s.phase} onChange={e => updateStatePhase(s.id, e.target.value as "pre" | "work" | "post")} style={{ ...inp, width: "auto", fontSize: 11, padding: "3px 7px" }}>
                           {Object.entries(PHASE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                         </select>
-                        <Btn variant="danger" onClick={() => removeStateItem(s.id)} style={{ fontSize: 11, padding: "3px 8px" }}>✕</Btn>
+                        <Btn variant="danger" onClick={() => removeStateItem(s.id)} style={{ fontSize: 11, padding: "3px 8px" }}>âœ•</Btn>
                       </div>
                     )} />
                   </div>
                 );
               })}
               <div style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${T.border}`, padding: 13, marginTop: 6 }}>
-                <p style={{ margin: "0 0 9px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>Añadir estado</p>
+                <p style={{ margin: "0 0 9px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>AÃ±adir estado</p>
                 <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
                   <input value={newStateName} onChange={e => setNewStateName(e.target.value)} placeholder="Nombre del estado" style={{ ...inp, flex: 1, minWidth: 100 }} />
                   <select value={newStatePhase} onChange={e => setNewStatePhase(e.target.value as "pre" | "work" | "post")} style={{ ...inp, width: "auto" }}>
                     {Object.entries(PHASE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                   </select>
-                  <Btn variant="primary" onClick={addState}>Añadir</Btn>
+                  <Btn variant="primary" onClick={addState}>AÃ±adir</Btn>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── COLUMNAS ── */}
+          {/* â”€â”€ COLUMNAS â”€â”€ */}
           {section === "columnas" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Columnas</h2>
-                <Btn variant="primary" onClick={addColumn}>+ Añadir</Btn>
+                <Btn variant="primary" onClick={addColumn}>+ AÃ±adir</Btn>
               </div>
               {unassigned.length > 0 && (
                 <div style={{ backgroundColor: "#FAEEDA", border: "1.5px solid #EF9F27", borderRadius: 11, padding: "10px 14px", marginBottom: 14 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#633806", fontFamily: FONT }}>⚠ Estados sin columna: </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#633806", fontFamily: FONT }}>âš  Estados sin columna: </span>
                   <span style={{ fontSize: 12, color: "#633806", fontFamily: FONT }}>{unassigned.map(s => s.name).join(", ")}</span>
                 </div>
               )}
@@ -513,7 +516,7 @@ export function SettingsPage({
                 return (
                   <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `2px solid ${cc}55`, overflow: "hidden", marginBottom: 10, cursor: "grab" }}>
                     <div style={{ background: cc, padding: "8px 13px", display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>⠿</span>
+                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>â ¿</span>
                       <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: FONT, flex: 1 }}>{c.name}</span>
                       <select value={c.phase} onChange={e => updateCol(c.id, { phase: e.target.value as "pre" | "work" | "post" })}
                         style={{ fontSize: 11, borderRadius: 7, border: "none", padding: "2px 6px", backgroundColor: "rgba(255,255,255,0.2)", color: "#fff", fontFamily: FONT, cursor: "pointer", outline: "none" }}>
@@ -527,7 +530,7 @@ export function SettingsPage({
                           <input value={c.name} onChange={e => updateCol(c.id, { name: e.target.value })} style={{ ...inp, width: "100%" }} />
                         </div>
                         <div>
-                          <label style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 3 }}>Límite WIP</label>
+                          <label style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, fontFamily: FONT, display: "block", marginBottom: 3 }}>LÃ­mite WIP</label>
                           <input type="number" min={0} value={c.wip_limit || 0}
                             onChange={e => updateCol(c.id, { wip_limit: Math.max(0, parseInt(e.target.value) || 0) })}
                             style={{ ...inp, width: 65, textAlign: "center" }} />
@@ -564,29 +567,29 @@ export function SettingsPage({
             </div>
           )}
 
-          {/* ── CATEGORIAS ── */}
+          {/* â”€â”€ CATEGORIAS â”€â”€ */}
           {section === "categorias" && (
             <div>
-              <h2 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Categorías</h2>
+              <h2 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>CategorÃ­as</h2>
               <DragList items={board.categories} keyFn={c => c} onReorder={reorderCats} renderItem={c => (
                 <div style={{ backgroundColor: T.bg, borderRadius: 10, border: `1.5px solid ${T.border}`, padding: "9px 13px", display: "flex", alignItems: "center", gap: 9, marginBottom: 6, cursor: "grab" }}>
-                  <span style={{ fontSize: 14, color: T.textSoft }}>⠿</span>
+                  <span style={{ fontSize: 14, color: T.textSoft }}>â ¿</span>
                   <span style={{ flex: 1, fontSize: 13, fontFamily: FONT, color: T.text }}>{c}</span>
-                  <Btn variant="danger" onClick={() => removeCat(c)} style={{ fontSize: 11, padding: "3px 8px" }}>✕</Btn>
+                  <Btn variant="danger" onClick={() => removeCat(c)} style={{ fontSize: 11, padding: "3px 8px" }}>âœ•</Btn>
                 </div>
               )} />
               <div style={{ display: "flex", gap: 7, marginTop: 8 }}>
-                <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Nueva categoría..." style={{ ...inp, flex: 1 }} />
-                <Btn variant="primary" onClick={addCat}>Añadir</Btn>
+                <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Nueva categorÃ­a..." style={{ ...inp, flex: 1 }} />
+                <Btn variant="primary" onClick={addCat}>AÃ±adir</Btn>
               </div>
             </div>
           )}
 
-          {/* ── CAMPOS ── */}
+          {/* â”€â”€ CAMPOS â”€â”€ */}
           {section === "campos" && (
             <div>
               <h2 style={{ margin: "0 0 5px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Campos visibles en el modal</h2>
-              <p style={{ margin: "0 0 16px", fontSize: 12, color: T.textSoft, fontFamily: FONT }}>Título, estado, descripción y creador siempre visibles.</p>
+              <p style={{ margin: "0 0 16px", fontSize: 12, color: T.textSoft, fontFamily: FONT }}>TÃ­tulo, estado, descripciÃ³n y creador siempre visibles.</p>
               {OPT_FIELDS.map(f => (
                 <div key={f.id} style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${T.border}`, padding: "11px 15px", display: "flex", alignItems: "center", gap: 11, marginBottom: 7 }}>
                   <Toggle on={(board.visible_fields || []).includes(f.id)} onChange={v => toggleField(f.id, v)} />
@@ -596,13 +599,13 @@ export function SettingsPage({
             </div>
           )}
 
-          {/* ── ACCESO ── */}
+          {/* â”€â”€ ACCESO â”€â”€ */}
           {section === "acceso" && (
             <div>
               <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Acceso al tablero</h2>
               {([
-                { key: "public" as const, label: "Acceso público por URL", desc: "Cualquier persona con el enlace puede ver el tablero." },
-                { key: "requireLogin" as const, label: "Requiere autenticación", desc: "Solo miembros autenticados con acceso pueden entrar." },
+                { key: "public" as const, label: "Acceso pÃºblico por URL", desc: "Cualquier persona con el enlace puede ver el tablero." },
+                { key: "requireLogin" as const, label: "Requiere autenticaciÃ³n", desc: "Solo miembros autenticados con acceso pueden entrar." },
               ]).map(opt => (
                 <div key={opt.key} onClick={() => updateBoardConfig({ [opt.key]: !board.board_config?.[opt.key] })}
                   style={{ backgroundColor: T.bg, borderRadius: 13, border: `2px solid ${board.board_config?.[opt.key] ? T.accent : T.border}`, padding: "13px 15px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, marginBottom: 9 }}>
@@ -629,3 +632,6 @@ export function SettingsPage({
     </div>
   );
 }
+
+
+

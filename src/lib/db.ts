@@ -19,6 +19,7 @@ import type {
   BoardColumn,
   Card,
   BoardLog,
+  CompanyAdminLog,
   Improvement,
   ImprovementVote,
   BoardInvite,
@@ -828,6 +829,38 @@ export async function loadCompanyLogs(companyId: string, limit = 200): Promise<B
     .order("created_at", { ascending: false })
     .limit(limit);
   return (data || []) as BoardLog[];
+}
+
+export async function loadCompanyAdminLogs(companyId: string, limit = 200): Promise<CompanyAdminLog[]> {
+  const { data } = await supabase
+    .from("company_admin_logs")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data || []) as CompanyAdminLog[];
+}
+
+export async function logCompanyAdminAction(
+  companyId: string,
+  userId: string,
+  action: string,
+  entityType?: string | null,
+  entityId?: string | null,
+  details?: Record<string, unknown> | null
+) {
+  const payload = {
+    id: uid(),
+    company_id: companyId,
+    user_id: userId,
+    action,
+    entity_type: entityType || null,
+    entity_id: entityId || null,
+    details: details || null,
+    created_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("company_admin_logs").insert(payload);
+  if (error) console.error("logCompanyAdminAction error:", error);
 }
 
 export async function loadCompanyBackups(companyId: string): Promise<CompanyBackup[]> {

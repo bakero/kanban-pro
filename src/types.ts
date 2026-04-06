@@ -199,6 +199,17 @@ export interface BoardLog {
   created_at: string;
 }
 
+export interface CompanyAdminLog {
+  id: string;
+  company_id: string;
+  user_id: string;
+  action: string;
+  entity_type?: string | null;
+  entity_id?: string | null;
+  details?: Record<string, unknown> | null;
+  created_at: string;
+}
+
 export interface CompanyBackup {
   id: string;
   company_id: string;

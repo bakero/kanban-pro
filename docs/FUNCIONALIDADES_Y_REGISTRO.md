@@ -1,6 +1,10 @@
 # Funcionalidades y registro de evolucion
 
 ## Funcionalidades disponibles actualmente
+> Nota de gobernanza (2026-04-06):
+> - Las funcionalidades se gestionan a nivel de empresa (no por proyecto ni por tablero).
+> - No se permiten funcionalidades diferentes entre tableros del mismo proyecto.
+> - La consola global es exclusiva para `bkasero@gmail.com`; la consola de empresa es activable y deja trazas.
 
 ### 1. Gestion de tableros Kanban
 - Seleccion del tablero activo desde la cabecera.
@@ -26,12 +30,15 @@
 - Registro de fechas de completado y descarte.
 
 ### 4. Seguimiento y metricas
-- Calculo y visualizacion de lead time medio.
-- Calculo y visualizacion de cycle time medio.
-- Calculo y visualizacion de throughput semanal.
-- Indicador global de carga WIP.
-- Indicador de dias que una tarjeta lleva en su estado actual.
-- Seguimiento del tiempo acumulado por columna dentro de cada tarjeta.
+- Metricas minimas siempre activas:
+  - Lead time medio.
+  - Cycle time medio.
+  - Throughput semanal.
+  - Indicador global de carga WIP.
+  - Seguimiento del tiempo acumulado por columna dentro de cada tarjeta.
+- Metricas avanzadas activables:
+  - Burnup chart.
+  - Burndown chart.
 
 ### 5. Filtros de trabajo
 - Filtro de "Mis tareas".
@@ -96,7 +103,14 @@
 - Generacion manual de backups y listado de backups disponibles.
 - Gestion del catalogo de funcionalidades global y overrides por empresa.
 
+### 10.1. Consola de administracion por empresa (activable)
+- Acceso restringido a usuarios autorizados del tenant.
+- Gestion de datos propios de la empresa (usuarios, proyectos, tableros, mejoras, logs, backups).
+- Toda accion administrativa deja trazas en el sistema.
+- Algunas funciones siguen siendo exclusivas de `bkasero@gmail.com` (catalogo global, aprobaciones centrales).
+
 ### 11. Logs y backups por empresa
+- Funcionalidad activable por empresa.
 - Registro de cambios por tablero en `board_logs` con empresa, usuario, elemento, cambio y fecha.
 - Retencion de logs configurable por empresa.
 - Backups automaticos diarios (1AM Madrid) del estado de cada empresa.
@@ -108,6 +122,7 @@
 - Actualizacion en tiempo real de tarjetas mediante canal realtime de Supabase.
 - Tema visual configurable por usuario en modo claro, oscuro o segun sistema.
 - Interfaz visual unificada con paleta de bajo contraste, columnas suaves, tarjetas redondeadas y leyendas persistentes para facilitar la lectura rapida del tablero y de la consola de administracion.
+- La consola tecnica global es exclusiva de `bkasero@gmail.com`.
 
 ### 13. Autenticacion y aislamiento por empresa
 - Inicio de sesion con cuenta de Google mediante Supabase Auth.
@@ -119,6 +134,38 @@
 - Cada empresa solo ve sus proyectos, tableros, mejoras, logs y backups.
 - El acceso a la consola central sigue reservado al email `bkasero@gmail.com`.
 - `bkasero@gmail.com` puede usar tanto la app principal como la consola administrativa.
+- La autenticacion y el aislamiento se gestionan por empresa (no existe modo sin empresa).
+
+---
+
+## Catalogo de funcionalidades (gobernanza)
+
+### Obligatorias (siempre activas por empresa)
+- Gestion de tableros.
+- Gestion de tarjetas.
+- Flujo Kanban y movimiento.
+- Metricas minimas (lead time, cycle time, throughput, WIP global, tiempos por columna).
+- Filtros de trabajo.
+- Comentarios y archivos.
+- Configuracion funcional del tablero.
+- Sistema de mejoras por empresa.
+- Redisenio visual con tema configurable.
+- Arquitectura multi-tenant simplificada (Empresa -> Proyecto -> Tablero).
+
+### Activables por empresa
+- Metricas avanzadas (burnup, burndown).
+- Dependencias y contexto de tarjeta.
+- Tipos de tarjeta (epica/iniciativa/bug).
+- Categorias.
+- Workspaces (Empresa -> Workspace -> Proyecto).
+- Consola de administracion por empresa (con trazas obligatorias).
+- Logs y backups por empresa.
+- Autenticacion y aislamiento por empresa (sin modo single-tenant).
+
+### Exclusivas de super admin (`bkasero@gmail.com`)
+- Consola global multi-tenant.
+- Catalogo global de funcionalidades y aprobaciones centrales.
+- Consola tecnica global (integracion tecnica).
 
 ## Registro de nuevas funcionalidades
 
@@ -249,7 +296,8 @@ Usa este bloque cada vez que se implemente una funcionalidad nueva. La idea es d
   - Las funcionalidades desactivadas ocultan su UI pero sus datos siguen grabandose.
   - Las funcionalidades obligatorias (`is_mandatory = true`) siempre estan activas y no pueden desactivarse desde el proyecto.
 - Impacto en usuario:
-  - Los usuarios ven un breadcrumb Empresa / Espacio / Proyecto / Tablero en la cabecera.
+  - Por defecto la navegacion es Empresa / Proyecto / Tablero (version simplificada).
+  - Si Workspaces esta activo, se habilita el breadcrumb Empresa / Espacio / Proyecto / Tablero.
   - La gestion de miembros se hace desde Configuracion > Miembros (por proyecto). Las funcionalidades se gestionan a nivel de empresa.
   - Los usuarios sin empresa asignada ven un mensaje claro indicandoles que contacten a su administrador.
 - Archivos principales:
@@ -261,7 +309,7 @@ Usa este bloque cada vez que se implemente una funcionalidad nueva. La idea es d
   - `src/components/admin/SuperAdminPage.tsx` — consola super admin nueva (reemplaza AdminConsolePage)
   - `src/constants.ts` — SUPER_ADMIN_EMAIL extraido como constante compartida
 - Notas tecnicas: las tablas `board_members` y `board_invites` quedan obsoletas; la gestion de acceso pasa a `company_members`, `company_invites` y `project_members`. La funcion `resolveCompanyFeatureFlags` combina el catalogo con los overrides en una unica pasada y devuelve un Record<string, boolean> listo para usar en guardas de renderizado.
-- Actualizacion (2026-04-06): las funcionalidades ahora se gestionan por empresa (no por proyecto), se registra `company_id` en tableros y mejoras, y la consola admin multi-tenant centraliza logs, backups y aprobacion de mejoras.
+- Actualizacion (2026-04-06): las funcionalidades ahora se gestionan por empresa (no por proyecto), se registra `company_id` en tableros y mejoras, y la consola admin multi-tenant centraliza logs, backups y aprobacion de mejoras. Workspaces pasa a ser funcionalidad activable.
 
 ### Rediseño visual sobrio con tema configurable por usuario
 - Estado: `implementada`

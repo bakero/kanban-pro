@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- Kanban Pro - Datos de prueba (multi-tenant)
 -- Ejecutar en Supabase SQL Editor
 -- ============================================================
@@ -15,15 +15,29 @@ VALUES
   ('user-beta-admin',   'user-beta-admin',   'Bea Admin',       'admin@beta.com',      'BA', '#7F77DD', TRUE, NOW(), NOW()),
   ('user-beta-ops',     'user-beta-ops',     'Oscar Ops',       'ops@beta.com',        'OO', '#888780', TRUE, NOW(), NOW()),
   ('user-beta-viewer',  'user-beta-viewer',  'Vera Viewer',     'viewer@beta.com',     'VV', '#BA7517', TRUE, NOW(), NOW())
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (email) DO UPDATE
+SET
+  auth_user_id = EXCLUDED.auth_user_id,
+  name = EXCLUDED.name,
+  initials = EXCLUDED.initials,
+  color = EXCLUDED.color,
+  google_login_enabled = EXCLUDED.google_login_enabled,
+  google_confirmed_at = EXCLUDED.google_confirmed_at,
+  activation_email_sent_at = EXCLUDED.activation_email_sent_at;
 
 -- ============================================================
 -- COMPANIES
 -- ============================================================
 INSERT INTO companies (id, name, slug, contact_email, license_plan, created_by, is_active)
-VALUES
-  ('comp-acme', 'Acme Studio', 'acme-studio', 'admin@acme.com', 'professional', 'user-super', TRUE),
-  ('comp-beta', 'Beta Labs',   'beta-labs',   'admin@beta.com', 'starter',       'user-super', TRUE)
+SELECT
+  v.id, v.name, v.slug, v.contact_email, v.license_plan,
+  (SELECT id FROM users WHERE email = 'bkasero@gmail.com' LIMIT 1) AS created_by,
+  v.is_active
+FROM (
+  VALUES
+    ('comp-acme', 'Acme Studio', 'acme-studio', 'admin@acme.com', 'professional', TRUE),
+    ('comp-beta', 'Beta Labs',   'beta-labs',   'admin@beta.com', 'starter',       TRUE)
+) AS v(id, name, slug, contact_email, license_plan, is_active)
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
@@ -48,13 +62,20 @@ ON CONFLICT (id) DO NOTHING;
 -- COMPANY MEMBERS (1 usuario = 1 empresa)
 -- ============================================================
 INSERT INTO company_members (id, company_id, user_id, role, invited_by)
-VALUES
-  ('cm-acme-admin', 'comp-acme', 'user-acme-admin',  'company_admin',  'user-super'),
-  ('cm-acme-dev',   'comp-acme', 'user-acme-dev',    'member',         'user-acme-admin'),
-  ('cm-acme-pm',    'comp-acme', 'user-acme-pm',     'project_manager','user-acme-admin'),
-  ('cm-beta-admin', 'comp-beta', 'user-beta-admin',  'company_admin',  'user-super'),
-  ('cm-beta-ops',   'comp-beta', 'user-beta-ops',    'member',         'user-beta-admin'),
-  ('cm-beta-view',  'comp-beta', 'user-beta-viewer', 'viewer',         'user-beta-admin')
+SELECT
+  'cm-acme-admin', 'comp-acme', 'user-acme-admin', 'company_admin',
+  (SELECT id FROM users WHERE email = 'bkasero@gmail.com' LIMIT 1)
+UNION ALL SELECT
+  'cm-acme-dev',   'comp-acme', 'user-acme-dev',   'member',          'user-acme-admin'
+UNION ALL SELECT
+  'cm-acme-pm',    'comp-acme', 'user-acme-pm',    'project_manager', 'user-acme-admin'
+UNION ALL SELECT
+  'cm-beta-admin', 'comp-beta', 'user-beta-admin', 'company_admin',
+  (SELECT id FROM users WHERE email = 'bkasero@gmail.com' LIMIT 1)
+UNION ALL SELECT
+  'cm-beta-ops',   'comp-beta', 'user-beta-ops',   'member',          'user-beta-admin'
+UNION ALL SELECT
+  'cm-beta-view',  'comp-beta', 'user-beta-viewer','viewer',          'user-beta-admin'
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
@@ -97,14 +118,20 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================
 INSERT INTO features (id, key, label, description, default_on, is_mandatory, sort_order)
 VALUES
-  ('feat-metrics',      'metrics',       'Metricas',             'Lead time, cycle time y throughput', TRUE,  FALSE, 0),
-  ('feat-improvements', 'improvements',  'Mejoras',              'Backlog de mejoras con votacion',     TRUE,  FALSE, 1),
-  ('feat-wip',          'wip',           'Control WIP',          'Limites WIP en columnas',            TRUE,  FALSE, 2),
-  ('feat-timecol',      'time_tracking', 'Tiempos por columna',  'Registro de tiempo por columna',     TRUE,  FALSE, 3),
-  ('feat-filters',      'filters',       'Filtros',              'Filtros de tarjetas',                TRUE,  FALSE, 4),
-  ('feat-deps',         'dependencies',  'Dependencias',         'Relaciones entre tarjetas',          TRUE,  FALSE, 5),
-  ('feat-types',        'card_types',    'Tipos de trabajo',     'Epica, iniciativa, bug, tarea',      TRUE,  FALSE, 6),
-  ('feat-categories',   'categories',    'Categorias',           'Categorizacion de tarjetas',         TRUE,  FALSE, 7)
+  ('feat-metrics',         'metrics',               'Metricas minimas',        'Lead time, cycle time, throughput, WIP global y tiempos por columna', TRUE,  TRUE,  0),
+  ('feat-metrics-burnup',  'metrics_burnup',        'Burnup chart',            'Grafico avanzado de progreso',                                       FALSE, FALSE, 1),
+  ('feat-metrics-burndown','metrics_burndown',      'Burndown chart',          'Grafico avanzado de progreso',                                       FALSE, FALSE, 2),
+  ('feat-improvements',    'improvements',          'Mejoras',                 'Backlog de mejoras con votacion',                                    TRUE,  TRUE,  3),
+  ('feat-wip',             'wip',                   'Control WIP',             'Limites WIP en columnas',                                            TRUE,  TRUE,  4),
+  ('feat-timecol',         'time_tracking',         'Tiempos por columna',     'Registro de tiempo por columna',                                     TRUE,  TRUE,  5),
+  ('feat-filters',         'filters',               'Filtros',                 'Filtros de tarjetas',                                                TRUE,  TRUE,  6),
+  ('feat-deps',            'dependencies',          'Dependencias',            'Relaciones entre tarjetas',                                          FALSE, FALSE, 7),
+  ('feat-types',           'card_types',            'Tipos de trabajo',        'Epica, iniciativa, bug, tarea',                                      FALSE, FALSE, 8),
+  ('feat-categories',      'categories',            'Categorias',              'Categorizacion de tarjetas',                                         FALSE, FALSE, 9),
+  ('feat-workspaces',      'workspaces',            'Workspaces',              'Empresa -> Workspace -> Proyecto',                                  FALSE, FALSE, 10),
+  ('feat-company-admin',   'company_admin_console', 'Consola empresa',         'Consola administrativa por empresa con trazas',                      FALSE, FALSE, 11),
+  ('feat-logs-backups',    'logs_backups',          'Logs y backups',           'Trazas y backups por empresa',                                       FALSE, FALSE, 12),
+  ('feat-auth',            'auth_isolation',        'Auth y aislamiento',      'Autenticacion y aislamiento por empresa',                            FALSE, FALSE, 13)
 ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
@@ -227,7 +254,7 @@ VALUES
   ),
   (
     'card-acme-3', 'ACM-003', 'board-acme-main', 'col-acme-3', 'st-acme-3',
-    'API de tablero', 'Endpoints de tableros y columnas.', 'tarea', 'Backend', '', FALSE, 'user-acme-dev',
+    'API de tablero', 'Endpoints de tableros y columnas.', 'tarea', 'Backend', NULL, FALSE, 'user-acme-dev',
     jsonb_build_array(),
     jsonb_build_array(),
     jsonb_build_array(
@@ -241,7 +268,7 @@ VALUES
   ),
   (
     'card-acme-4', 'ACM-004', 'board-acme-main', 'col-acme-3', 'st-acme-3',
-    'Documentar tablero', 'Guia rapida para usuarios.', 'tarea', 'Producto', '', FALSE, 'user-acme-admin',
+    'Documentar tablero', 'Guia rapida para usuarios.', 'tarea', 'Producto', NULL, FALSE, 'user-acme-admin',
     jsonb_build_array('guia.pdf'),
     jsonb_build_array(),
     jsonb_build_array(
@@ -255,7 +282,7 @@ VALUES
   ),
   (
     'card-acme-5', 'ACM-005', 'board-acme-main', 'col-acme-4', 'st-acme-4',
-    'Spike externo', 'Descartado por cambio de alcance.', 'tarea', 'Producto', '', FALSE, 'user-acme-pm',
+    'Spike externo', 'Descartado por cambio de alcance.', 'tarea', 'Producto', NULL, FALSE, 'user-acme-pm',
     jsonb_build_array(),
     jsonb_build_array(),
     jsonb_build_array(
@@ -299,7 +326,7 @@ VALUES
   ),
   (
     'card-mkt-2', 'MKT-002', 'board-acme-marketing', 'col-mkt-3', 'st-mkt-3',
-    'Post lanzamiento', 'Resumen de resultados.', 'tarea', 'Contenido', '', FALSE, 'user-acme-admin',
+    'Post lanzamiento', 'Resumen de resultados.', 'tarea', 'Contenido', NULL, FALSE, 'user-acme-admin',
     jsonb_build_array(),
     jsonb_build_array(),
     jsonb_build_array(
@@ -339,7 +366,7 @@ VALUES
   ),
   (
     'card-beta-2', 'BET-002', 'board-beta-main', 'col-beta-3', 'st-beta-3',
-    'MVP listo', 'Entrega version 0.1', 'tarea', 'Mobile', '', FALSE, 'user-beta-ops',
+    'MVP listo', 'Entrega version 0.1', 'tarea', 'Mobile', NULL, FALSE, 'user-beta-ops',
     jsonb_build_array('release-notes.md'),
     jsonb_build_array(),
     jsonb_build_array(
@@ -393,3 +420,4 @@ VALUES
   ('backup-acme-2', 'comp-acme', 'user-acme-admin', 'Backup previo demo', '{"boards":["board-acme-main"]}', NOW() - interval '1 day'),
   ('backup-beta-1', 'comp-beta', 'user-beta-admin', 'Backup inicial', '{"boards":["board-beta-main"]}', NOW() - interval '5 days')
 ON CONFLICT (id) DO NOTHING;
+

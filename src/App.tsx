@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { FONT, PHASE_COLORS, SUPER_ADMIN_EMAIL } from "./constants";
@@ -23,7 +23,6 @@ import {
   saveColumn,
   saveState,
   seedBoardForProject,
-  sendGoogleActivationEmail,
   createCompanyBackup,
   saveCompanySettings,
   setCompanyFeature,
@@ -39,6 +38,7 @@ import { LoginPage } from "./components/LoginPage";
 import { NewKanbanModal } from "./components/NewKanbanModal";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { SuperAdminPage } from "./components/admin/SuperAdminPage";
+import { CompanyAdminPage } from "./admin/CompanyAdminPage";
 import type {
   Board,
   BoardColumn,
@@ -56,7 +56,7 @@ import type {
   Workspace,
 } from "./types";
 
-type AppPage = "board" | "settings" | "improvements" | "admin";
+type AppPage = "board" | "settings" | "improvements" | "admin" | "company-admin";
 
 export default function App() {
   const prefersDark = usePrefersDark();
@@ -94,8 +94,19 @@ export default function App() {
   const [showMetrics, setShowMetrics] = useState(true);
   const [showNewKanban, setShowNewKanban] = useState(false);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
-  const [activationInfo, setActivationInfo] = useState<string | null>(null);
+
   const dragCardId = useRef<string | null>(null);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [activeMobileColIdx, setActiveMobileColIdx] = useState(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const update = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  useEffect(() => { setActiveMobileColIdx(0); }, [activeBoardId]);
 
   const userThemeKey = currentUser?.email ? `kanban-pro:theme:${currentUser.email.toLowerCase()}` : null;
   const T = resolveTheme(themeMode, prefersDark);
@@ -356,8 +367,52 @@ export default function App() {
   const metricDefs = [
     { label: "Lead time medio", value: formatDur(avgLead), color: T.accent, hint: leadTimes.length ? `${leadTimes.length} completadas` : "Sin datos" },
     { label: "Cycle time medio", value: formatDur(avgCycle), color: T.warning, hint: wipCols.map(c => c.name).join(", ") || "Sin WIP" },
-    { label: "Throughput", value: String(throughput), color: T.success, hint: "Últimos 7 días" },
+    { label: "Throughput", value: String(throughput), color: T.success, hint: "Ãšltimos 7 dÃ­as" },
   ];
+
+  const burnSeries = (() => {
+    const days = 14;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (days - 1));
+    const keys: string[] = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      keys.push(d.toISOString().slice(0, 10));
+    }
+    const createdByDay = new Map<string, number>();
+    const doneByDay = new Map<string, number>();
+    for (const c of cards) {
+      if (c.discarded_at) continue;
+      const createdKey = c.created_at?.slice(0, 10);
+      if (createdKey && keys.includes(createdKey)) createdByDay.set(createdKey, (createdByDay.get(createdKey) || 0) + 1);
+      const doneKey = c.completed_at?.slice(0, 10);
+      if (doneKey && keys.includes(doneKey)) doneByDay.set(doneKey, (doneByDay.get(doneKey) || 0) + 1);
+    }
+    let created = 0;
+    let done = 0;
+    const createdSeries: number[] = [];
+    const doneSeries: number[] = [];
+    keys.forEach(k => {
+      created += createdByDay.get(k) || 0;
+      done += doneByDay.get(k) || 0;
+      createdSeries.push(created);
+      doneSeries.push(done);
+    });
+    const remainingSeries = createdSeries.map((c, i) => Math.max(0, c - doneSeries[i]));
+    return { keys, createdSeries, doneSeries, remainingSeries };
+  })();
+
+  function seriesPath(values: number[], width: number, height: number) {
+    if (!values.length) return "";
+    const max = Math.max(...values, 1);
+    return values.map((v, i) => {
+      const x = (i / Math.max(1, values.length - 1)) * width;
+      const y = height - (v / max) * height;
+      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }).join(" ");
+  }
 
   const filters = [
     { id: "mine", label: "Mis tareas", fn: (c: Card) => c.creator_id === currentUser?.id },
@@ -474,7 +529,7 @@ export default function App() {
     const tpc = { ...card.time_per_col };
     tpc[card.col_id] = (tpc[card.col_id] || 0) + elapsed;
     const hist = [...card.history];
-    if (reason) hist.push(histEntry(`Justificación: ${reason}`, currentUser));
+    if (reason) hist.push(histEntry(`JustificaciÃ³n: ${reason}`, currentUser));
     hist.push(histEntry(`Movida a "${columns.find(c => c.id === colId)?.name}" (${newState?.name})`, currentUser));
     const isDone = newState?.phase === "post" && !newState?.is_discard;
     const isDiscard = !!newState?.is_discard;
@@ -552,12 +607,6 @@ export default function App() {
     }
   }
 
-  async function handleActivationEmail() {
-    if (!currentUser?.email) return;
-    await sendGoogleActivationEmail(currentUser.email);
-    setActivationInfo(`Email de confirmación enviado a ${currentUser.email}`);
-  }
-
   async function handleLogout() {
     await supabase.auth.signOut();
     setSession(null);
@@ -603,6 +652,18 @@ export default function App() {
     return withTheme(<SuperAdminPage currentUser={currentUser} onBack={() => setPage("board")} />);
   }
 
+  if (page === "company-admin" && currentUser && company && featureFlags.company_admin_console && companyRole === "company_admin") {
+    return withTheme(
+      <CompanyAdminPage
+        currentUser={currentUser}
+        company={company}
+        companyRole={companyRole}
+        featureFlags={featureFlags}
+        onBack={() => setPage("board")}
+      />
+    );
+  }
+
   if (!company) {
     return withTheme(
       <div style={{ minHeight: "100vh", background: T.bgSoft, padding: 24, fontFamily: FONT }}>
@@ -612,7 +673,7 @@ export default function App() {
               onClick={() => setPage("admin")}
               style={{ fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 12, border: `1px solid ${T.accent}`, backgroundColor: T.accentSoft, color: T.accent, cursor: "pointer" }}
             >
-              ◈ Abrir consola de administración
+              â—ˆ Abrir consola de administraciÃ³n
             </button>
           </div>
         )}
@@ -681,7 +742,9 @@ export default function App() {
   }
 
   return withTheme(
-    <div style={{ fontFamily: FONT, backgroundColor: T.bgSoft, minHeight: "100vh", position: "relative", color: T.text }}>
+    <div style={{ fontFamily: FONT, backgroundColor: T.bg, height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", color: T.text }}>
+
+      {/* â”€â”€ Modals â”€â”€ */}
       {modal && (
         <CardModal
           card={modal}
@@ -692,6 +755,7 @@ export default function App() {
           currentUser={currentUser}
           companyId={company.id}
           showImprovements={!!featureFlags.improvements}
+          featureFlags={featureFlags}
           allCards={cards}
           categories={board.categories}
           onClose={() => setModal(null)}
@@ -711,229 +775,357 @@ export default function App() {
       )}
       {showNewKanban && <NewKanbanModal onClose={() => setShowNewKanban(false)} onCreate={createBoard} />}
 
-      <div style={{ position: "sticky", top: 0, zIndex: 100, padding: "16px 20px 10px" }}>
-        <div style={{ backgroundColor: T.bgSidebar, border: `1px solid ${T.border}`, backdropFilter: "blur(18px)", boxShadow: T.shadowMd, padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, borderRadius: 20, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: -0.5 }}>Kanban Pro</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: T.accent, padding: "6px 10px", borderRadius: 999, background: T.accentSoft, border: `1px solid ${T.border}` }}>
-            Soft workflow UI
-          </span>
-          {companyLinks.length > 1 && (
-            <select
-              value={activeCompanyId || ""}
-              onChange={e => {
-                const next = e.target.value;
-                setActiveCompanyId(next);
-                setActiveWorkspaceId(null);
-                setActiveProjectId(null);
-                setActiveBoardId(null);
-                setBoards([]);
-                setColumns([]);
-                setStates([]);
-                setCards([]);
-              }}
-              style={{ fontSize: 12, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer", maxWidth: 180 }}
-            >
-              {companyLinks.map(c => <option key={c.company.id} value={c.company.id}>{c.company.name}</option>)}
-            </select>
-          )}
-          {workspaces.length > 0 && (
-            <select
-              value={activeWorkspaceId || ""}
-              onChange={e => {
-                const next = e.target.value;
-                setActiveWorkspaceId(next);
-                setActiveProjectId(null);
-                setActiveBoardId(null);
-                setBoards([]);
-                setColumns([]);
-                setStates([]);
-                setCards([]);
-              }}
-              style={{ fontSize: 12, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer", maxWidth: 180 }}
-            >
-              {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          )}
-          {projects.length > 0 && (
-            <select
-              value={activeProjectId || ""}
-              onChange={e => {
-                const next = e.target.value;
-                setActiveProjectId(next);
-                setActiveBoardId(null);
-                setBoards([]);
-                setColumns([]);
-                setStates([]);
-                setCards([]);
-              }}
-              style={{ fontSize: 12, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer", maxWidth: 180 }}
-            >
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          )}
-          <select
-            value={activeBoardId || ""}
-            onChange={e => setActiveBoardId(e.target.value)}
-            style={{ fontSize: 13, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer", maxWidth: 220 }}
-          >
-            {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
-          </select>
-          <button
-            onClick={() => setShowNewKanban(true)}
-            style={{ fontSize: 12, fontWeight: 700, padding: "10px 12px", borderRadius: 12, border: `1px dashed ${T.borderStrong}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}
-          >
-            + Nuevo tablero
-          </button>
-          <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 12, color: T.textSoft }}>{currentUser.name}</span>
-          {featureFlags.wip && wipCols.length > 0 && (
-            <span style={{ fontSize: 12, fontWeight: 700, color: wipTotal > 0 ? T.warning : T.textSoft, background: T.bgElevated, borderRadius: 999, padding: "8px 12px", border: `1px solid ${T.border}` }}>
-              WIP {wipTotal}/{wipCols.reduce((a, c) => a + (c.wip_limit || 0), 0) || "∞"}
-            </span>
-          )}
-          {featureFlags.metrics && (
-            <button onClick={() => setShowMetrics(v => !v)} style={{ fontSize: 12, fontWeight: 700, padding: "10px 12px", borderRadius: 12, border: `1px solid ${showMetrics ? T.accent : T.border}`, backgroundColor: showMetrics ? T.accentSoft : "transparent", color: showMetrics ? T.accent : T.textSoft, cursor: "pointer" }}>
-              {showMetrics ? "▼ Métricas" : "▶ Métricas"}
-            </button>
-          )}
-          {featureFlags.improvements && (
-            <button onClick={() => setPage("improvements")} style={{ fontSize: 12, fontWeight: 700, padding: "10px 12px", borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
-              Mejoras
-            </button>
-          )}
-          {isSuperAdmin && (
-            <button onClick={() => setPage("admin")} style={{ fontSize: 12, fontWeight: 700, padding: "10px 12px", borderRadius: 12, border: `1px solid ${T.accent}`, backgroundColor: T.accentSoft, color: T.accent, cursor: "pointer" }}>
-              ◈ Admin
-            </button>
-          )}
-          <button onClick={() => setPage("settings")} style={{ fontSize: 12, fontWeight: 700, padding: "10px 12px", borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
-            Config.
-          </button>
-          <button onClick={handleActivationEmail} style={{ fontSize: 12, fontWeight: 700, padding: "10px 12px", borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
-            Email activación
-          </button>
-          <button onClick={handleLogout} style={{ fontSize: 12, fontWeight: 700, padding: "10px 12px", borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
-            Salir
-          </button>
-          <select
-            value={themeMode}
-            onChange={e => setThemeMode(e.target.value as ThemeMode)}
-            style={{ fontSize: 12, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}
-          >
-            <option value="system">Tema sistema</option>
-            <option value="light">Modo claro</option>
-            <option value="dark">Modo oscuro</option>
-          </select>
-          {featureFlags.improvements && (
-            <ImprovementBtn companyId={company?.id || ""} boardId={activeBoardId || ""} userId={currentUser.id} userName={currentUser.name} context="board" />
-          )}
-          <button onClick={newCard} style={{ fontSize: 13, fontWeight: 800, padding: "11px 18px", borderRadius: 14, border: "none", backgroundColor: T.accent, color: "#fff", cursor: "pointer", boxShadow: T.shadowSm }}>
-            + Nueva tarjeta
-          </button>
+      {/* â”€â”€ Mobile slide-out menu â”€â”€ */}
+      {isMobile && mobileMenuOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.overlay }} onClick={() => setMobileMenuOpen(false)}>
+          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 280, background: T.bg, borderLeft: `1px solid ${T.border}`, display: "flex", flexDirection: "column" }}
+               onClick={e => e.stopPropagation()}>
+            <div style={{ padding: "20px 20px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 4 }}>Kanban Pro</div>
+              <div style={{ fontSize: 12, color: T.textSoft }}>{currentUser.name}</div>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {companyLinks.length > 1 && (
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>EMPRESA</div>
+                  <select value={activeCompanyId || ""} onChange={e => { const v = e.target.value; setActiveCompanyId(v); setActiveWorkspaceId(null); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); setMobileMenuOpen(false); }}
+                    style={{ width: "100%", fontSize: 13, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
+                    {companyLinks.map(c => <option key={c.company.id} value={c.company.id}>{c.company.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {featureFlags.workspaces && workspaces.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>ESPACIO</div>
+                  <select value={activeWorkspaceId || ""} onChange={e => { const v = e.target.value; setActiveWorkspaceId(v); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); setMobileMenuOpen(false); }}
+                    style={{ width: "100%", fontSize: 13, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
+                    {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {projects.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>PROYECTO</div>
+                  <select value={activeProjectId || ""} onChange={e => { const v = e.target.value; setActiveProjectId(v); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); setMobileMenuOpen(false); }}
+                    style={{ width: "100%", fontSize: 13, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>TEMA</div>
+                <select value={themeMode} onChange={e => setThemeMode(e.target.value as ThemeMode)}
+                  style={{ width: "100%", fontSize: 13, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
+                  <option value="system">Sistema</option>
+                  <option value="light">Claro</option>
+                  <option value="dark">Oscuro</option>
+                </select>
+              </div>
+              <div style={{ height: 1, background: T.border }} />
+              {featureFlags.metrics && (
+                <button onClick={() => { setShowMetrics(v => !v); setMobileMenuOpen(false); }}
+                  style={{ textAlign: "left", fontSize: 13, fontWeight: 600, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
+                  {showMetrics ? "â–¼" : "â–¶"} MÃ©tricas
+                </button>
+              )}
+                {featureFlags.improvements && (
+                  <button onClick={() => { setPage("improvements"); setMobileMenuOpen(false); }}
+                    style={{ textAlign: "left", fontSize: 13, fontWeight: 600, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
+                    ðŸ’¡ Mejoras
+                  </button>
+                )}
+                {featureFlags.company_admin_console && companyRole === "company_admin" && (
+                  <button onClick={() => { setPage("company-admin"); setMobileMenuOpen(false); }}
+                    style={{ textAlign: "left", fontSize: 13, fontWeight: 700, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
+                    Admin empresa
+                  </button>
+                )}
+                {isSuperAdmin && (
+                <button onClick={() => { setPage("admin"); setMobileMenuOpen(false); }}
+                  style={{ textAlign: "left", fontSize: 13, fontWeight: 700, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.accent}`, backgroundColor: T.accentSoft, color: T.accent, cursor: "pointer" }}>
+                  â—ˆ Admin
+                </button>
+              )}
+              <button onClick={() => { setPage("settings"); setMobileMenuOpen(false); }}
+                style={{ textAlign: "left", fontSize: 13, fontWeight: 600, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
+                âš™ ConfiguraciÃ³n
+              </button>
+              <button onClick={() => { setShowNewKanban(true); setMobileMenuOpen(false); }}
+                style={{ textAlign: "left", fontSize: 13, fontWeight: 600, padding: "10px 12px", borderRadius: 10, border: `1px dashed ${T.borderStrong}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
+                + Nuevo tablero
+              </button>
+            </div>
+            <div style={{ padding: "12px 16px", borderTop: `1px solid ${T.border}` }}>
+              <button onClick={handleLogout}
+                style={{ width: "100%", fontSize: 13, fontWeight: 700, padding: "12px", borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.danger, cursor: "pointer" }}>
+                Salir
+              </button>
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* â”€â”€ HEADER â”€â”€ */}
+      {isMobile ? (
+        <div style={{ flexShrink: 0, backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, backdropFilter: "blur(18px)" }}>
+          <div style={{ display: "flex", alignItems: "center", padding: "12px 16px 8px", gap: 10 }}>
+            <span style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: -0.5, flex: 1 }}>Kanban Pro</span>
+            <span style={{ fontSize: 11, color: T.textSoft, maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.name}</span>
+            {featureFlags.improvements && (
+              <ImprovementBtn companyId={company?.id || ""} boardId={activeBoardId || ""} userId={currentUser.id} userName={currentUser.name} context="board" />
+            )}
+            <button onClick={() => setMobileMenuOpen(true)}
+              style={{ fontSize: 16, lineHeight: 1, padding: "7px 11px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
+              â˜°
+            </button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", padding: "0 16px 10px", gap: 8 }}>
+            <select value={activeBoardId || ""} onChange={e => setActiveBoardId(e.target.value)}
+              style={{ flex: 1, fontSize: 13, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
+              {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+            </select>
+            <button onClick={newCard}
+              style={{ flexShrink: 0, fontSize: 13, fontWeight: 800, padding: "10px 16px", borderRadius: 12, border: "none", backgroundColor: T.accent, color: "#fff", cursor: "pointer", boxShadow: T.shadowSm }}>
+              + Tarjeta
+            </button>
+          </div>
+          {/* Column tabs */}
+          <div style={{ display: "flex", padding: "0 12px", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
+            {columns.map((col, i) => {
+              const colColor = PHASE_COLORS[col.phase] || "#888";
+              const active = i === activeMobileColIdx;
+              const cnt = cards.filter(c => c.col_id === col.id && cardVisible(c)).length;
+              return (
+                <button key={col.id} onClick={() => setActiveMobileColIdx(i)}
+                  style={{ flexShrink: 0, marginBottom: 10, fontSize: 11, fontWeight: 700, padding: "7px 12px", borderRadius: 10, border: `1px solid ${active ? colColor : T.border}`, backgroundColor: active ? `${colColor}18` : "transparent", color: active ? colColor : T.textSoft, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
+                  {col.name}
+                  <span style={{ fontSize: 10, background: active ? colColor : T.bgElevated, color: active ? "#fff" : T.textSoft, borderRadius: 999, padding: "1px 6px" }}>{cnt}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div style={{ flexShrink: 0, padding: "10px 16px", backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, backdropFilter: "blur(18px)", boxShadow: T.shadowSm }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 16, fontWeight: 800, color: T.text, letterSpacing: -0.5, marginRight: 4 }}>Kanban Pro</span>
+            {companyLinks.length > 1 && (
+              <select value={activeCompanyId || ""} onChange={e => { const v = e.target.value; setActiveCompanyId(v); setActiveWorkspaceId(null); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
+                style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
+                {companyLinks.map(c => <option key={c.company.id} value={c.company.id}>{c.company.name}</option>)}
+              </select>
+            )}
+            {featureFlags.workspaces && workspaces.length > 0 && (
+              <select value={activeWorkspaceId || ""} onChange={e => { const v = e.target.value; setActiveWorkspaceId(v); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
+                style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
+                {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            )}
+            {projects.length > 0 && (
+              <select value={activeProjectId || ""} onChange={e => { const v = e.target.value; setActiveProjectId(v); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
+                style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            )}
+            <select value={activeBoardId || ""} onChange={e => setActiveBoardId(e.target.value)}
+              style={{ fontSize: 11, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
+              {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+            </select>
+            <button onClick={() => setShowNewKanban(true)}
+              style={{ fontSize: 11, fontWeight: 600, padding: "7px 9px", borderRadius: 9, border: `1px dashed ${T.borderStrong}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
+              + Tablero
+            </button>
+            <div style={{ flex: 1 }} />
+            <span style={{ fontSize: 11, color: T.textSoft }}>{currentUser.name}</span>
+            {featureFlags.wip && wipCols.length > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: wipTotal > 0 ? T.warning : T.textSoft, background: T.bgElevated, borderRadius: 999, padding: "5px 10px", border: `1px solid ${T.border}` }}>
+                WIP {wipTotal}/{wipCols.reduce((a, c) => a + (c.wip_limit || 0), 0) || "âˆž"}
+              </span>
+            )}
+            {featureFlags.metrics && (
+              <button onClick={() => setShowMetrics(v => !v)}
+                style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${showMetrics ? T.accent : T.border}`, backgroundColor: showMetrics ? T.accentSoft : "transparent", color: showMetrics ? T.accent : T.textSoft, cursor: "pointer" }}>
+                MÃ©tricas
+              </button>
+            )}
+              {featureFlags.improvements && (
+                <button onClick={() => setPage("improvements")}
+                  style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
+                  Mejoras
+                </button>
+              )}
+              {featureFlags.company_admin_console && companyRole === "company_admin" && (
+                <button onClick={() => setPage("company-admin")}
+                  style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
+                  Admin empresa
+                </button>
+              )}
+              {isSuperAdmin && (
+              <button onClick={() => setPage("admin")}
+                style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.accent}`, backgroundColor: T.accentSoft, color: T.accent, cursor: "pointer" }}>
+                â—ˆ Admin
+              </button>
+            )}
+            <button onClick={() => setPage("settings")}
+              style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
+              âš™ Config.
+            </button>
+            <select value={themeMode} onChange={e => setThemeMode(e.target.value as ThemeMode)}
+              style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
+              <option value="system">ðŸŒ“</option>
+              <option value="light">â˜€</option>
+              <option value="dark">ðŸŒ™</option>
+            </select>
+            {featureFlags.improvements && (
+              <ImprovementBtn companyId={company?.id || ""} boardId={activeBoardId || ""} userId={currentUser.id} userName={currentUser.name} context="board" />
+            )}
+            <button onClick={newCard}
+              style={{ fontSize: 12, fontWeight: 800, padding: "8px 16px", borderRadius: 10, border: "none", backgroundColor: T.accent, color: "#fff", cursor: "pointer", boxShadow: T.shadowSm }}>
+              + Tarjeta
+            </button>
+            <button onClick={handleLogout}
+              style={{ fontSize: 11, fontWeight: 600, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
+              Salir
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* â”€â”€ Sub-header: metrics Â· filters â”€â”€ */}
+      <div style={{ flexShrink: 0 }}>
+        {featureFlags.metrics && showMetrics && (
+          <div style={{ padding: "8px 16px", display: "flex", gap: 10, overflowX: "auto", scrollbarWidth: "none" }}>
+            {metricDefs.map(m => (
+              <div key={m.label} style={{ backgroundColor: T.bgElevated, borderRadius: 14, border: `1px solid ${T.border}`, padding: "10px 14px", minWidth: isMobile ? 120 : 150, flexShrink: 0, boxShadow: T.shadowSm }}>
+                <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 600, color: T.textSoft }}>{m.label}</p>
+                <p style={{ margin: "0 0 2px", fontSize: isMobile ? 16 : 20, fontWeight: 800, color: m.color }}>{m.value}</p>
+                <p style={{ margin: 0, fontSize: 9, color: T.textSoft }}>{m.hint}</p>
+              </div>
+            ))}
+            {(featureFlags.metrics_burnup || featureFlags.metrics_burndown) && (
+              <div style={{ backgroundColor: T.bgElevated, borderRadius: 14, border: `1px solid ${T.border}`, padding: "10px 14px", minWidth: isMobile ? 180 : 220, flexShrink: 0, boxShadow: T.shadowSm }}>
+                <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: T.textSoft }}>MÃ©tricas avanzadas</p>
+                <svg width={isMobile ? 160 : 200} height={60} style={{ display: "block" }}>
+                  {featureFlags.metrics_burnup && (
+                    <path d={seriesPath(burnSeries.createdSeries, isMobile ? 160 : 200, 50)} stroke={T.warning} strokeWidth="2" fill="none" />
+                  )}
+                  {featureFlags.metrics_burndown && (
+                    <path d={seriesPath(burnSeries.remainingSeries, isMobile ? 160 : 200, 50)} stroke={T.success} strokeWidth="2" fill="none" />
+                  )}
+                </svg>
+                <div style={{ display: "flex", gap: 8, fontSize: 9, color: T.textSoft }}>
+                  {featureFlags.metrics_burnup && <span>Burnup</span>}
+                  {featureFlags.metrics_burndown && <span>Burndown</span>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {featureFlags.filters && (
+          <div style={{ margin: "0 16px 8px", padding: "8px 12px", display: "flex", gap: 6, alignItems: "center", border: `1px solid ${T.border}`, borderRadius: 14, backgroundColor: T.bgSidebar, flexWrap: "wrap", backdropFilter: "blur(14px)" }}>
+            {!isMobile && (["pre", "work", "post"] as const).map(phase => (
+              <span key={phase} style={{ fontSize: 10, fontWeight: 700, color: PHASE_COLORS[phase], padding: "3px 8px", borderRadius: 999, background: `${PHASE_COLORS[phase]}14`, border: `1px solid ${PHASE_COLORS[phase]}40` }}>
+                {phase === "pre" ? "Pre" : phase === "work" ? "En curso" : "Post"}
+              </span>
+            ))}
+            {!isMobile && <div style={{ width: 1, height: 14, background: T.border }} />}
+            {filters.map(f => {
+              const on = activeFilters.includes(f.id);
+              return (
+                <button key={f.id} onClick={() => setActiveFilters(fs => on ? fs.filter(x => x !== f.id) : [...fs, f.id])}
+                  style={{ fontSize: 11, fontWeight: 700, padding: "5px 10px", borderRadius: 999, border: `1px solid ${on ? T.accent : T.border}`, backgroundColor: on ? T.accentSoft : "transparent", color: on ? T.accent : T.textSoft, cursor: "pointer" }}>
+                  {f.label}
+                </button>
+              );
+            })}
+            {activeFilters.length > 0 && (
+              <button onClick={() => setActiveFilters([])}
+                style={{ fontSize: 11, fontWeight: 700, padding: "5px 8px", borderRadius: 999, border: "none", backgroundColor: "transparent", color: T.danger, cursor: "pointer" }}>
+                âœ•
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {activationInfo && (
-        <div style={{ margin: "0 20px 12px", padding: "12px 14px", background: T.successSoft, border: `1px solid ${T.success}44`, color: T.success, fontSize: 12, borderRadius: 14 }}>
-          {activationInfo}
-        </div>
-      )}
-
-      {featureFlags.metrics && showMetrics && (
-        <div style={{ padding: "0 20px 14px", display: "flex", gap: 12, overflowX: "auto" }}>
-          {metricDefs.map(m => (
-            <div key={m.label} style={{ backgroundColor: T.bgElevated, borderRadius: 18, border: `1px solid ${T.border}`, padding: "14px 16px", minWidth: 170, flexShrink: 0, boxShadow: T.shadowSm }}>
-              <p style={{ margin: "0 0 2px", fontSize: 11, fontWeight: 600, color: T.textSoft }}>{m.label}</p>
-              <p style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 800, color: m.color }}>{m.value}</p>
-              <p style={{ margin: 0, fontSize: 10, color: T.textSoft }}>{m.hint}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {featureFlags.filters && (
-        <div style={{ margin: "0 20px 16px", padding: "12px 14px", display: "flex", gap: 8, alignItems: "center", border: `1px solid ${T.border}`, borderRadius: 18, backgroundColor: T.bgSidebar, flexWrap: "wrap", backdropFilter: "blur(14px)" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: T.text, padding: "5px 9px", borderRadius: 999, background: T.bgElevated, border: `1px solid ${T.border}` }}>Leyenda</span>
-          {(["pre", "work", "post"] as const).map(phase => (
-            <span key={phase} style={{ fontSize: 11, fontWeight: 700, color: PHASE_COLORS[phase], padding: "5px 10px", borderRadius: 999, background: T.bgElevated, border: `1px solid ${T.border}` }}>
-              {phase === "pre" ? "Pre-trabajo" : phase === "work" ? "En-trabajo" : "Post-trabajo"}
-            </span>
-          ))}
-          <span style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, marginLeft: 6 }}>Filtros:</span>
-          {filters.map(f => {
-            const on = activeFilters.includes(f.id);
-            return (
-              <button
-                key={f.id}
-                onClick={() => setActiveFilters(fs => on ? fs.filter(x => x !== f.id) : [...fs, f.id])}
-                style={{ fontSize: 12, fontWeight: 700, padding: "8px 12px", borderRadius: 999, border: `1px solid ${on ? T.accent : T.border}`, backgroundColor: on ? T.accentSoft : "transparent", color: on ? T.accent : T.textSoft, cursor: "pointer" }}
-              >
-                {f.label}
-              </button>
-            );
-          })}
-          {activeFilters.length > 0 && (
-            <button onClick={() => setActiveFilters([])} style={{ fontSize: 11, fontWeight: 700, padding: "8px 10px", borderRadius: 999, border: "none", backgroundColor: "transparent", color: T.danger, cursor: "pointer" }}>
-              x Limpiar
-            </button>
-          )}
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 16, padding: "0 20px 24px", overflowX: "auto", alignItems: "flex-start", minHeight: "calc(100vh - 190px)" }}>
-        {columns.map(col => {
+      {/* â”€â”€ Board area â”€â”€ */}
+      {isMobile ? (
+        (() => {
+          const col = columns[activeMobileColIdx];
+          if (!col) return null;
           const colColor = PHASE_COLORS[col.phase] || "#888";
           const colCards = cards.filter(c => c.col_id === col.id && cardVisible(c));
           const wipOver = col.is_wip && col.wip_limit > 0 && colCards.length > col.wip_limit;
           return (
-            <div
-              key={col.id}
-              onDragOver={onDragOver}
-              onDrop={e => onDrop(e, col.id)}
-              style={{
-                width: 292,
-                minWidth: 292,
-                flexShrink: 0,
-                backgroundColor: T.bgColumn,
-                borderRadius: 22,
-                border: `1px solid ${wipOver ? T.danger : T.border}`,
-                display: "flex",
-                flexDirection: "column",
-                maxHeight: "calc(100vh - 210px)",
-                boxShadow: T.shadowSm,
-              }}
-            >
-              <div style={{ padding: "16px 16px 10px", borderBottom: `1px solid ${T.border}` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: colColor, letterSpacing: 0.2 }}>{col.name.toUpperCase()}</span>
-                  <div style={{ flex: 1 }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: wipOver ? T.danger : T.textSoft, background: T.bgElevated, borderRadius: 999, padding: "4px 10px", border: `1px solid ${T.border}` }}>
-                    {colCards.length}{col.wip_limit > 0 ? `/${col.wip_limit}` : ""}
-                  </span>
-                </div>
-                <div style={{ marginTop: 10, height: 4, borderRadius: 999, background: `${colColor}26`, overflow: "hidden" }}>
-                  <div style={{ width: "38%", height: "100%", borderRadius: 999, background: colColor }} />
-                </div>
-                {col.is_wip && (
-                  <span style={{ fontSize: 9, fontWeight: 800, color: wipOver ? T.danger : T.warning, background: wipOver ? T.dangerSoft : T.warningSoft, borderRadius: 999, padding: "3px 8px", marginTop: 10, display: "inline-block" }}>
-                    WIP{wipOver ? " - LIMITE SUPERADO" : ""}
-                  </span>
-                )}
+            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}
+                 onDragOver={onDragOver} onDrop={e => onDrop(e, col.id)}>
+              <div style={{ padding: "10px 16px 6px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: colColor, flexShrink: 0 }} />
+                <span style={{ fontSize: 11, fontWeight: 800, color: colColor, flex: 1, letterSpacing: 0.8 }}>{col.name.toUpperCase()}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: wipOver ? T.danger : T.textSoft, background: T.bgElevated, borderRadius: 999, padding: "3px 10px", border: `1px solid ${T.border}` }}>
+                  {colCards.length}{col.wip_limit > 0 ? `/${col.wip_limit}` : ""}
+                </span>
+                {wipOver && <span style={{ fontSize: 9, fontWeight: 800, color: T.danger, background: T.dangerSoft, borderRadius: 999, padding: "2px 7px" }}>WIP!</span>}
               </div>
-              <div style={{ padding: "12px", overflowY: "auto", flex: 1 }}>
+              <div style={{ flex: 1, overflowY: "auto", padding: "6px 12px 16px", scrollbarWidth: "thin" }}>
                 {colCards.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "28px 0", color: T.textSoft, fontSize: 12, fontStyle: "italic", border: `1px dashed ${T.borderStrong}`, borderRadius: 16, background: T.bgElevated }}>
-                    Sin tarjetas
+                  <div style={{ textAlign: "center", padding: "48px 0", color: T.textSoft, fontSize: 13, fontStyle: "italic", border: `1px dashed ${T.borderStrong}`, borderRadius: 18, background: T.bgElevated, margin: "4px 0" }}>
+                    Sin tarjetas en esta columna
                   </div>
                 )}
                 {colCards.map(card => (
-                  <KCard key={card.id} card={card} columns={columns} states={states} users={users} allCards={cards} onOpen={openCard} onDragStart={onDragStart} />
+                  <KCard key={card.id} card={card} columns={columns} states={states} users={users} allCards={cards} featureFlags={featureFlags} onOpen={openCard} onDragStart={onDragStart} />
                 ))}
               </div>
             </div>
           );
-        })}
-      </div>
+        })()
+      ) : (
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", gap: 10, padding: "12px 16px 14px", alignItems: "stretch" }}>
+          {columns.map(col => {
+            const colColor = PHASE_COLORS[col.phase] || "#888";
+            const colCards = cards.filter(c => c.col_id === col.id && cardVisible(c));
+            const wipOver = col.is_wip && col.wip_limit > 0 && colCards.length > col.wip_limit;
+            const wipPct = col.wip_limit > 0 ? Math.min(100, (colCards.length / col.wip_limit) * 100) : 30;
+            return (
+              <div key={col.id} onDragOver={onDragOver} onDrop={e => onDrop(e, col.id)}
+                style={{ flex: 1, minWidth: 200, backgroundColor: T.bgColumn, borderRadius: 18, border: `1px solid ${wipOver ? T.danger : T.border}`, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: T.shadowSm }}>
+                <div style={{ padding: "12px 14px 10px", borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: colColor, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, fontWeight: 800, color: colColor, letterSpacing: 0.6, flex: 1 }}>{col.name.toUpperCase()}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: wipOver ? T.danger : T.textSoft, background: T.bgElevated, borderRadius: 999, padding: "3px 9px", border: `1px solid ${T.border}` }}>
+                      {colCards.length}{col.wip_limit > 0 ? `/${col.wip_limit}` : ""}
+                    </span>
+                  </div>
+                  <div style={{ marginTop: 8, height: 3, borderRadius: 999, background: `${colColor}20`, overflow: "hidden" }}>
+                    <div style={{ width: `${wipPct}%`, height: "100%", borderRadius: 999, background: colColor, transition: "width .4s ease" }} />
+                  </div>
+                  {col.is_wip && (
+                    <span style={{ fontSize: 9, fontWeight: 800, color: wipOver ? T.danger : T.warning, background: wipOver ? T.dangerSoft : T.warningSoft, borderRadius: 999, padding: "2px 7px", marginTop: 6, display: "inline-block" }}>
+                      WIP{wipOver ? " â€” LÃMITE" : ""}
+                    </span>
+                  )}
+                </div>
+                <div style={{ padding: "8px", overflowY: "auto", flex: 1, scrollbarWidth: "thin" }}>
+                  {colCards.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "24px 0", color: T.textSoft, fontSize: 12, fontStyle: "italic", border: `1px dashed ${T.borderStrong}`, borderRadius: 14, background: T.bgElevated }}>
+                      Sin tarjetas
+                    </div>
+                  )}
+                  {colCards.map(card => (
+                    <KCard key={card.id} card={card} columns={columns} states={states} users={users} allCards={cards} featureFlags={featureFlags} onOpen={openCard} onDragStart={onDragStart} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>,
   );
 }
+
+
+
+
