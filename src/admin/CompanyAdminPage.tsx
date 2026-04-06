@@ -94,7 +94,10 @@ export function CompanyAdminPage({ currentUser, company, companyRole, featureFla
     { id: "tableros", label: "Tableros" },
     { id: "trabajos", label: "Trabajos" },
     { id: "mejoras", label: "Mejoras" },
-    ...(featureFlags.logs_backups ? [{ id: "logs", label: "Logs" }, { id: "backups", label: "Backups" }] : []),
+    ...((featureFlags.logs_backups ? [
+      { id: "logs" as CompanyAdminSection, label: "Logs" },
+      { id: "backups" as CompanyAdminSection, label: "Backups" },
+    ] : [])),
     { id: "funcionalidades", label: "Funcionalidades" },
   ];
 
