@@ -2,7 +2,7 @@
 import type { User } from "../types";
 import { useTheme } from "../hooks/useTheme";
 import { Avatar } from "./ui/Avatar";
-import { getUserFirstName, getUserLastName, getUserFullName, nameInitials } from "../lib/utils";
+import { getUserFirstName, getUserLastName, nameInitials } from "../lib/utils";
 import { updateUserProfile, uploadAvatar } from "../lib/db";
 import { useLang } from "../i18n";
 import type { Lang } from "../i18n";

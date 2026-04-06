@@ -532,14 +532,6 @@ export default function App() {
     }
   }, [featureFlags.metrics]);
 
-  useEffect(() => {
-    if (!boardUrlId) return;
-    if (modal) return;
-    if (location.pathname !== boardUrl) {
-      navigate(boardUrl, { replace: true });
-    }
-  }, [boardUrlId, boardUrl, modal, navigate, location.pathname]);
-
   const board = boards.find(b => b.id === activeBoardId) || boards[0] || null;
   const boardUrlId = board?.numeric_id ?? board?.id;
   const hasHierarchy = !!(activeCompanyId && activeProjectId && activeBoardId);
@@ -622,14 +614,16 @@ export default function App() {
     { id: "overdue", label: t("filters.overdue"), fn: (c: Card) => !!c.due_date && new Date(c.due_date) < new Date() },
   ];
 
+  const isSuperAdmin = currentUser?.email === SUPER_ADMIN_EMAIL;
+
   const secondaryActions = page === "board" ? [
     { id: "newCard", label: t("menu.newCard"), onClick: () => { void newCard(); } },
     { id: "newBoard", label: t("menu.newBoard"), onClick: () => setShowNewKanban(true) },
     ...(featureFlags.metrics ? [{ id: "metrics", label: t("menu.metrics"), onClick: () => setShowMetrics(v => !v), active: showMetrics }] : []),
     ...(featureFlags.filters ? [{ id: "filters", label: t("filters.toggle"), onClick: () => setShowFilters(v => !v), active: showFilters }] : []),
     ...(featureFlags.wip && wipCols.length > 0 ? [{ id: "wip", label: t("board.wip", { current: wipTotal, limit: wipLimitTotal || t("board.wipUnlimited") }), disabled: true }] : []),
-    ...(featureFlags.improvements ? [{ id: "improvements", label: t("menu.improvements"), onClick: () => setPage("improvements"), active: page === "improvements" }] : []),
-    { id: "settings", label: t("menu.settings"), onClick: () => setPage("settings"), active: page === "settings" },
+    ...(featureFlags.improvements ? [{ id: "improvements", label: t("menu.improvements"), onClick: () => setPage("improvements") }] : []),
+    { id: "settings", label: t("menu.settings"), onClick: () => setPage("settings") },
     ...(featureFlags.company_admin_console && companyRole === "company_admin" ? [{ id: "companyAdmin", label: t("menu.companyAdmin"), onClick: () => setPage("company-admin") }] : []),
     ...(isSuperAdmin ? [{ id: "admin", label: t("menu.admin"), onClick: () => setPage("admin") }] : []),
   ] : [];
@@ -885,8 +879,6 @@ export default function App() {
       </div>,
     );
   }
-
-  const isSuperAdmin = currentUser?.email === SUPER_ADMIN_EMAIL;
 
   if (page === "admin" && isSuperAdmin && currentUser) {
     return withTheme(<SuperAdminPage currentUser={currentUser} onBack={() => setPage("board")} />);
@@ -1364,10 +1356,3 @@ export default function App() {
     </div>,
   );
 }
-
-
-
-
-
-
-

@@ -1497,7 +1497,7 @@ export async function resolveBoardByNumericId(numericId: number): Promise<Board 
 
 export async function updateUserProfile(
   userId: string,
-  updates: { first_name?: string; last_name?: string; avatar_url?: string; lang?: string }
+  updates: { first_name?: string; last_name?: string; avatar_url?: string | null; lang?: string }
 ): Promise<void> {
   const nameUpdate: Record<string, unknown> = { ...updates };
   if (updates.first_name !== undefined || updates.last_name !== undefined) {
