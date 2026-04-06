@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { FONT, TASK_TYPES } from "../constants";
+import { FONT, TASK_TYPES, PHASE_COLORS } from "../constants";
 import { useTheme } from "../hooks/useTheme";
 import { uid, nowStr, formatDur, histEntry } from "../lib/utils";
 import { Btn } from "./ui/Btn";
@@ -17,6 +17,9 @@ interface CardModalProps {
   columns: BoardColumn[];
   states: BoardState[];
   users: User[];
+  currentUser: User;
+  companyId: string;
+  showImprovements: boolean;
   allCards: Card[];
   categories: string[];
   onClose: () => void;
@@ -26,7 +29,7 @@ interface CardModalProps {
 }
 
 export function CardModal({
-  card, board, columns, states, users, allCards, categories,
+  card, board, columns, states, users, currentUser, companyId, showImprovements, allCards, categories,
   onClose, onSave, onSaveCat, onOpenCard,
 }: CardModalProps) {
   const T = useTheme();
@@ -37,25 +40,30 @@ export function CardModal({
   const [addingCat, setAddingCat]   = useState(false);
   const [depSearch, setDepSearch]   = useState<Record<string, string>>({});
   const [dirty, setDirty]           = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
   const [pendingState, setPendingState] = useState<{ stateId: string; colId: string; isDiscard?: boolean } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const activeUser = users[0];
+  const activeUser = currentUser;
   const creator    = users.find(u => u.id === data.creator_id);
   const curState   = states.find(s => s.id === data.state_id);
   const isDiscard  = curState?.name?.toLowerCase().includes("descart");
 
   const inp: React.CSSProperties = {
-    fontFamily: FONT, fontSize: 13, borderRadius: 8,
-    border: `1.5px solid ${T.border}`, padding: "8px 10px",
+    fontFamily: FONT, fontSize: 13, borderRadius: 10,
+    border: `1px solid ${T.border}`, padding: "9px 10px",
     width: "100%", boxSizing: "border-box",
-    backgroundColor: T.bgSoft, color: T.text, outline: "none",
+    backgroundColor: T.bgElevated, color: T.text, outline: "none",
   };
 
   function field(key: keyof Card, val: unknown) {
     if (data[key] === val) return;
     setDirty(true);
     setData(d => ({ ...d, [key]: val, history: [...d.history, histEntry(`"${String(key)}" → "${String(val)}"`, activeUser)] }));
+  }
+
+  function requestClose() {
+    if (!dirty || window.confirm("Hay cambios sin guardar. ¿Deseas salir sin guardar los cambios?")) {
+      onClose();
+    }
   }
 
   function changeState(stateId: string) {
@@ -128,7 +136,7 @@ export function CardModal({
 
   return (
     <div style={{
-      position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.55)",
+      position: "absolute", inset: 0, backgroundColor: T.overlay,
       display: "flex", alignItems: "flex-start", justifyContent: "center",
       zIndex: 500, padding: "32px 20px", overflowY: "auto",
     }}>
@@ -140,9 +148,9 @@ export function CardModal({
         />
       )}
       <div style={{
-        backgroundColor: T.bg, borderRadius: 20, border: `2px solid ${T.borderMed}`,
+        backgroundColor: T.bgSidebar, borderRadius: 24, border: `1px solid ${T.borderMed}`,
         width: "100%", maxWidth: 620,
-        boxShadow: "0 24px 64px rgba(0,0,0,0.25)", flexShrink: 0,
+        boxShadow: T.shadowLg, flexShrink: 0, backdropFilter: "blur(18px)",
       }}>
         {/* Header */}
         <div style={{ padding: "18px 20px 0", borderBottom: `1.5px solid ${T.border}`, borderRadius: "20px 20px 0 0" }}>
@@ -153,8 +161,8 @@ export function CardModal({
                 <span style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, fontFamily: FONT, textDecoration: isDiscard ? "line-through" : "none" }}>
                   {data.card_id}
                 </span>
-                {data.blocked && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 20, background: "#fdecea", color: "#c0392b", fontFamily: FONT }}>BLOQ.</span>}
-                {isDiscard    && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 20, background: "#FCEBEB", color: "#E24B4A",  fontFamily: FONT }}>DESCARTADO</span>}
+                {data.blocked && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 20, background: T.dangerSoft, color: T.danger, fontFamily: FONT }}>BLOQ.</span>}
+                {isDiscard    && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 20, background: T.dangerSoft, color: T.danger,  fontFamily: FONT }}>DESCARTADO</span>}
               </div>
               <input value={data.title} onChange={e => field("title", e.target.value)} style={{
                 fontFamily: FONT, fontSize: 15, fontWeight: 700, padding: "4px 0",
@@ -163,25 +171,17 @@ export function CardModal({
               }} />
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-              {confirmClose ? (
-                <>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, fontFamily: FONT, whiteSpace: "nowrap" }}>¿Salir sin guardar?</span>
-                  <Btn variant="outline" onClick={onClose} style={{ padding: "5px 10px", fontSize: 12 }}>Descartar</Btn>
-                  <Btn variant="primary" onClick={() => onSave(data)} style={{ padding: "5px 10px", fontSize: 12 }}>Guardar</Btn>
-                  <Btn variant="ghost" onClick={() => setConfirmClose(false)} style={{ padding: "5px 8px" }}>✕</Btn>
-                </>
-              ) : (
-                <>
-                  <ImprovementBtn
-                    boardId={board.id}
-                    userId={users[0]?.id || ""}
-                    userName={users[0]?.name || ""}
-                    context={`tarjeta:${data.card_id}`}
-                  />
-                  <Btn variant="primary" onClick={() => onSave(data)}>Guardar</Btn>
-                  <Btn variant="outline" onClick={() => dirty ? setConfirmClose(true) : onClose()} style={{ padding: "7px 11px" }}>✕</Btn>
-                </>
+              {showImprovements && (
+                <ImprovementBtn
+                  companyId={companyId}
+                  boardId={board.id}
+                  userId={currentUser.id}
+                  userName={currentUser.name}
+                  context={`tarjeta:${data.card_id}`}
+                />
               )}
+              <Btn variant="primary" onClick={() => onSave(data)}>Guardar</Btn>
+              <Btn variant="outline" onClick={requestClose} style={{ padding: "7px 11px" }}>✕</Btn>
             </div>
           </div>
           {/* Tabs */}
@@ -189,13 +189,13 @@ export function CardModal({
             {allTabs.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)} style={{
                 fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "7px 12px",
-                border: "none", borderBottom: tab === t.id ? "2.5px solid #7F77DD" : "2.5px solid transparent",
-                backgroundColor: "transparent", color: tab === t.id ? "#7F77DD" : T.textSoft,
+                border: "none", borderBottom: tab === t.id ? `2.5px solid ${T.accent}` : "2.5px solid transparent",
+                backgroundColor: "transparent", color: tab === t.id ? T.accent : T.textSoft,
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
               }}>
                 {t.label}
                 {(t.count ?? 0) > 0 && (
-                  <span style={{ fontSize: 9, background: tab === t.id ? "#7F77DD22" : T.bgSoft, color: tab === t.id ? "#7F77DD" : T.textSoft, borderRadius: 20, padding: "1px 5px", fontWeight: 700 }}>
+                  <span style={{ fontSize: 9, background: tab === t.id ? T.accentSoft : T.bgElevated, color: tab === t.id ? T.accent : T.textSoft, borderRadius: 20, padding: "1px 5px", fontWeight: 700 }}>
                     {t.count}
                   </span>
                 )}

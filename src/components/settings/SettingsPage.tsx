@@ -1,198 +1,459 @@
 import { useState } from "react";
-import { FONT, PHASE_COLORS, PHASE_META, HIDE_DONE_OPTIONS } from "../../constants";
-import { useTheme } from "../../hooks/useTheme";
+import { FONT, PHASE_COLORS, PHASE_META, HIDE_DONE_OPTIONS, SUPER_ADMIN_EMAIL } from "../../constants";
+import { useTheme, useThemeMode } from "../../hooks/useTheme";
 import { uid } from "../../lib/utils";
-import { saveBoard, saveColumn, saveState, saveUser, deleteUser, deleteColumn, deleteState } from "../../lib/db";
+import {
+  saveBoard,
+  saveColumn,
+  saveState,
+  deleteColumn,
+  deleteState,
+  loadProjectUsers,
+  addProjectMember,
+  removeProjectMember,
+  updateProjectMemberRole,
+} from "../../lib/db";
 import { Btn } from "../ui/Btn";
 import { Toggle } from "../ui/Toggle";
 import { Avatar } from "../ui/Avatar";
 import { DragList } from "../ui/DragList";
-import { UserModal } from "../UserModal";
 import { ImprovementBtn } from "../ImprovementBtn";
-import type { Board, BoardColumn, BoardState, User } from "../../types";
+import type {
+  Board, BoardColumn, BoardState, User,
+  Company, CompanyBackup, CompanySettings, Project, ProjectMember, Feature, FeatureFlags, CompanyRole, ProjectRole,
+} from "../../types";
 
 interface SettingsPageProps {
   board: Board;
+  project: Project | null;
   columns: BoardColumn[];
   states: BoardState[];
-  users: User[];
+  projectMembers: ProjectMember[];
+  currentUser: User;
+  myRole: CompanyRole;
+  myProjectRole: ProjectRole;
+  company: Company;
+  companySettings: CompanySettings | null;
+  companyBackups: CompanyBackup[];
+  featureFlags: FeatureFlags;
+  featureCatalog: Feature[];
+  activeProjectId: string | null;
   onBack: () => void;
   onUpdateBoard: (b: Board) => void;
   onUpdateColumns: (cols: BoardColumn[]) => void;
   onUpdateStates: (st: BoardState[]) => void;
-  onUpdateUsers: (users: User[]) => void;
+  onUpdateProjectMembers: (members: ProjectMember[]) => void;
+  onUpdateFeatureFlag: (key: string, enabled: boolean) => void;
+  onUpdateCompanySettings: (settings: CompanySettings) => void;
+  onCreateCompanyBackup: (summary: string) => Promise<void>;
 }
 
+const ROLE_LABELS: Record<ProjectRole, string> = {
+  project_manager: "Responsable",
+  member: "Miembro",
+  viewer: "Solo lectura",
+};
+
 export function SettingsPage({
-  board, columns, states, users, onBack,
-  onUpdateBoard, onUpdateColumns, onUpdateStates, onUpdateUsers,
+  board, project, columns, states, projectMembers, currentUser, myRole, myProjectRole,
+  company, companySettings, companyBackups,
+  featureFlags, featureCatalog, activeProjectId,
+  onBack, onUpdateBoard, onUpdateColumns, onUpdateStates,
+  onUpdateProjectMembers, onUpdateFeatureFlag, onUpdateCompanySettings, onCreateCompanyBackup,
 }: SettingsPageProps) {
   const T = useTheme();
-  const [section, setSection]               = useState("usuarios");
-  const [showUserModal, setShowUserModal]   = useState(false);
-  const [newStateName, setNewStateName]     = useState("");
-  const [newStatePhase, setNewStatePhase]   = useState<"pre" | "work" | "post">("pre");
-  const [newCatName, setNewCatName]         = useState("");
+  const { mode, setMode } = useThemeMode();
+  const canManageProject = myRole === "company_admin" || myProjectRole === "project_manager";
+  const canManageCompany = myRole === "company_admin";
+  const [section, setSection] = useState(
+    canManageCompany ? "empresa" : (activeProjectId ? "miembros" : "estados")
+  );
+  const [newStateName, setNewStateName] = useState("");
+  const [newStatePhase, setNewStatePhase] = useState<"pre" | "work" | "post">("pre");
+  const [newCatName, setNewCatName] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberRole, setMemberRole] = useState<ProjectRole>("member");
+  const [memberFeedback, setMemberFeedback] = useState("");
+  const [memberUsers, setMemberUsers] = useState<User[]>([]);
+  const [membersLoaded, setMembersLoaded] = useState(false);
+  const [companyBackupSummary, setCompanyBackupSummary] = useState("");
+  const [companyBackupFeedback, setCompanyBackupFeedback] = useState("");
+
 
   const inp: React.CSSProperties = {
-    fontFamily: FONT, fontSize: 13, borderRadius: 8,
-    border: `1.5px solid ${T.border}`, padding: "7px 10px",
-    backgroundColor: T.bgSoft, color: T.text, outline: "none", boxSizing: "border-box",
+    fontFamily: FONT, fontSize: 13, borderRadius: 10,
+    border: `1px solid ${T.border}`, padding: "9px 10px",
+    backgroundColor: T.bgElevated, color: T.text, outline: "none", boxSizing: "border-box",
   };
 
   const sections = [
-    { id: "usuarios",   label: "Usuarios"          },
-    { id: "estados",    label: "Estados"           },
-    { id: "columnas",   label: "Columnas"          },
-    { id: "categorias", label: "Categorías"        },
-    { id: "campos",     label: "Campos del modal"  },
-    { id: "acceso",     label: "Acceso"            },
+    ...(canManageCompany ? [{ id: "empresa", label: "Empresa" }] : []),
+    ...(activeProjectId ? [
+      { id: "miembros", label: "Miembros" },
+      { id: "funcionalidades", label: "Funcionalidades" },
+    ] : []),
+    { id: "estados", label: "Estados" },
+    { id: "columnas", label: "Columnas" },
+    { id: "categorias", label: "Categorías" },
+    { id: "campos", label: "Campos del modal" },
+    { id: "acceso", label: "Acceso" },
   ];
 
   const OPT_FIELDS = [
-    { id: "tipo",         label: "Tipo"          },
-    { id: "categoria",    label: "Categoría"     },
-    { id: "dueDate",      label: "Fecha entrega" },
-    { id: "bloqueado",    label: "Bloqueado"     },
-    { id: "dependencias", label: "Dependencias"  },
-    { id: "comentarios",  label: "Comentarios"   },
-    { id: "archivos",     label: "Archivos"      },
-    { id: "tiempos",      label: "Tiempos"       },
+    { id: "tipo", label: "Tipo" },
+    { id: "categoria", label: "Categoría" },
+    { id: "dueDate", label: "Fecha entrega" },
+    { id: "bloqueado", label: "Bloqueado" },
+    { id: "dependencias", label: "Dependencias" },
+    { id: "comentarios", label: "Comentarios" },
+    { id: "archivos", label: "Archivos" },
+    { id: "tiempos", label: "Tiempos" },
   ];
 
   const assignedStateIds = new Set(columns.flatMap(c => c.state_ids || []));
   const unassigned = states.filter(s => !assignedStateIds.has(s.id));
 
-  async function addUser(u: User)       { await saveUser(u);    onUpdateUsers([...users, u]); setShowUserModal(false); }
-  async function removeUser(id: string) { await deleteUser(id); onUpdateUsers(users.filter(u => u.id !== id)); }
-  async function toggleRole(id: string) {
-    const updated = users.map(u => u.id === id ? { ...u, role: (u.role === "MASTER" ? "USER" : "MASTER") as "MASTER" | "USER" } : u);
-    await saveUser(updated.find(u => u.id === id)!);
-    onUpdateUsers(updated);
+  // Load project member user details when entering the members section
+  async function ensureMemberUsers() {
+    if (membersLoaded || !activeProjectId) return;
+    const users = await loadProjectUsers(activeProjectId);
+    setMemberUsers(users);
+    setMembersLoaded(true);
+  }
+
+  async function handleAddMember() {
+    const email = memberEmail.trim().toLowerCase();
+    if (!email || !email.includes("@") || !activeProjectId) {
+      setMemberFeedback("Introduce un email válido.");
+      return;
+    }
+    // Look up user by email
+    const { supabase } = await import("../../lib/supabase");
+    const { data: userRow } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
+    if (!userRow) {
+      setMemberFeedback("No se encontró ningún usuario con ese email. El usuario debe haber iniciado sesión al menos una vez.");
+      return;
+    }
+    const user = userRow as User;
+    await addProjectMember(activeProjectId, user.id, memberRole, currentUser.id);
+    const newMember: ProjectMember = { id: uid(), project_id: activeProjectId, user_id: user.id, role: memberRole, assigned_by: currentUser.id };
+    onUpdateProjectMembers([...projectMembers, newMember]);
+    setMemberUsers(prev => prev.some(u => u.id === user.id) ? prev : [...prev, user]);
+    setMemberEmail("");
+    setMemberFeedback(`${user.name} añadido como ${ROLE_LABELS[memberRole]}.`);
+  }
+
+  async function handleRemoveMember(userId: string) {
+    if (!activeProjectId) return;
+    await removeProjectMember(activeProjectId, userId);
+    onUpdateProjectMembers(projectMembers.filter(m => m.user_id !== userId));
+  }
+
+  async function handleChangeRole(userId: string, role: ProjectRole) {
+    if (!activeProjectId) return;
+    await updateProjectMemberRole(activeProjectId, userId, role);
+    onUpdateProjectMembers(projectMembers.map(m => m.user_id === userId ? { ...m, role } : m));
+  }
+
+  async function handleFeatureToggle(key: string, enabled: boolean) {
+    if (!canManageCompany) return;
+    onUpdateFeatureFlag(key, enabled);
   }
 
   async function addState() {
     if (!newStateName.trim()) return;
     const ns: BoardState = { id: uid(), board_id: board.id, name: newStateName.trim(), phase: newStatePhase, is_discard: false, sort_order: states.length };
-    await saveState(ns);
+    await saveState(ns, currentUser.id);
     onUpdateStates([...states, ns]);
     setNewStateName("");
   }
-  async function removeStateItem(id: string) { await deleteState(id); onUpdateStates(states.filter(s => s.id !== id)); }
+
+  async function removeStateItem(id: string) { await deleteState(id, currentUser.id); onUpdateStates(states.filter(s => s.id !== id)); }
   async function updateStatePhase(id: string, phase: "pre" | "work" | "post") {
     const updated = states.map(s => s.id === id ? { ...s, phase } : s);
-    await saveState(updated.find(s => s.id === id)!);
+    await saveState(updated.find(s => s.id === id)!, currentUser.id);
     onUpdateStates(updated);
   }
   async function reorderStates(newStates: BoardState[]) {
     const reindexed = newStates.map((s, i) => ({ ...s, sort_order: i }));
-    await Promise.all(reindexed.map(saveState));
+    await Promise.all(reindexed.map(state => saveState(state, currentUser.id)));
     onUpdateStates(reindexed);
   }
 
   async function addColumn() {
     const nc: BoardColumn = { id: uid(), board_id: board.id, name: "Nueva columna", phase: "pre", state_ids: [], wip_limit: 0, is_wip: false, sort_order: columns.length };
-    await saveColumn(nc);
-    onUpdateColumns([...columns, nc]);
+    await saveColumn(nc, currentUser.id); onUpdateColumns([...columns, nc]);
   }
-  async function removeCol(id: string)  { await deleteColumn(id); onUpdateColumns(columns.filter(c => c.id !== id)); }
+  async function removeCol(id: string) { await deleteColumn(id, currentUser.id); onUpdateColumns(columns.filter(c => c.id !== id)); }
   async function updateCol(id: string, partial: Partial<BoardColumn>) {
     const updated = columns.map(c => c.id === id ? { ...c, ...partial } : c);
-    await saveColumn(updated.find(c => c.id === id)!);
+    await saveColumn(updated.find(c => c.id === id)!, currentUser.id);
     onUpdateColumns(updated);
   }
   async function reorderCols(newCols: BoardColumn[]) {
     const reindexed = newCols.map((c, i) => ({ ...c, sort_order: i }));
-    await Promise.all(reindexed.map(saveColumn));
+    await Promise.all(reindexed.map(col => saveColumn(col, currentUser.id)));
     onUpdateColumns(reindexed);
   }
 
   async function addCat() {
     if (!newCatName.trim() || board.categories.includes(newCatName.trim())) return;
     const updated = { ...board, categories: [...board.categories, newCatName.trim()] };
-    await saveBoard(updated); onUpdateBoard(updated); setNewCatName("");
+    await saveBoard(updated, currentUser.id); onUpdateBoard(updated); setNewCatName("");
   }
   async function removeCat(cat: string) {
     const updated = { ...board, categories: board.categories.filter(c => c !== cat) };
-    await saveBoard(updated); onUpdateBoard(updated);
+    await saveBoard(updated, currentUser.id); onUpdateBoard(updated);
   }
   async function reorderCats(cats: string[]) {
     const updated = { ...board, categories: cats };
-    await saveBoard(updated); onUpdateBoard(updated);
+    await saveBoard(updated, currentUser.id); onUpdateBoard(updated);
   }
 
   async function toggleField(fid: string, on: boolean) {
     const updated = { ...board, visible_fields: on ? [...board.visible_fields, fid] : board.visible_fields.filter(x => x !== fid) };
-    await saveBoard(updated); onUpdateBoard(updated);
+    await saveBoard(updated, currentUser.id); onUpdateBoard(updated);
   }
   async function updateBoardConfig(partial: Partial<Board["board_config"]>) {
     const updated = { ...board, board_config: { ...board.board_config, ...partial } };
-    await saveBoard(updated); onUpdateBoard(updated);
+    await saveBoard(updated, currentUser.id); onUpdateBoard(updated);
+  }
+
+  function updateCompanySettings(partial: Partial<CompanySettings>) {
+    const base: CompanySettings = companySettings || {
+      company_id: company.id,
+      log_retention_days: 30,
+      backup_retention_count: 10,
+      backup_enabled: true,
+      updated_at: new Date().toISOString(),
+    };
+    const updated = { ...base, ...partial, updated_at: new Date().toISOString() };
+    onUpdateCompanySettings(updated);
+  }
+
+  async function handleCreateBackup() {
+    if (!canManageCompany) return;
+    const summary = companyBackupSummary.trim() || "Backup manual";
+    await onCreateCompanyBackup(summary);
+    setCompanyBackupSummary("");
+    setCompanyBackupFeedback("Backup generado.");
   }
 
   return (
     <div style={{ fontFamily: FONT, backgroundColor: T.bgSoft, minHeight: "100vh", position: "relative" }}>
-      {showUserModal && <UserModal onClose={() => setShowUserModal(false)} onSave={addUser} />}
-
-      {/* Header */}
-      <div style={{ backgroundColor: T.bg, borderBottom: `1.5px solid ${T.border}`, padding: "13px 22px", display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, padding: "14px 22px", display: "flex", alignItems: "center", gap: 14, backdropFilter: "blur(18px)" }}>
         <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: T.textSoft, padding: 0 }}>
           ← Volver
         </button>
         <span style={{ color: T.border }}>|</span>
-        <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.text, flex: 1 }}>Configuración — {board.title}</span>
-        <ImprovementBtn
-          boardId={board.id}
-          userId={users[0]?.id || ""}
-          userName={users[0]?.name || ""}
-          context="configuración"
-        />
+        <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: T.text, flex: 1 }}>
+          Configuración — {project ? `${project.name} / ` : ""}{board.title}
+        </span>
+        <select
+          value={mode}
+          onChange={e => setMode(e.target.value as "system" | "light" | "dark")}
+          style={{ fontFamily: FONT, fontSize: 12, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "9px 10px", backgroundColor: T.bgElevated, color: T.text }}
+        >
+          <option value="system">Tema sistema</option>
+          <option value="light">Modo claro</option>
+          <option value="dark">Modo oscuro</option>
+        </select>
+        {currentUser.email.toLowerCase() === SUPER_ADMIN_EMAIL && (
+          <a
+            href="/admin.html"
+            style={{ fontSize: 11, fontWeight: 700, color: T.danger, border: `1px solid ${T.danger}`, padding: "6px 10px", borderRadius: 999, textDecoration: "none", marginRight: 8 }}
+          >
+            Consola admin
+          </a>
+        )}
+        {featureFlags.improvements && (
+          <ImprovementBtn companyId={company.id} boardId={board.id} userId={currentUser.id} userName={currentUser.name} context="configuración" />
+        )}
       </div>
 
       <div style={{ display: "flex", minHeight: "calc(100vh - 52px)" }}>
         {/* Sidebar */}
-        <div style={{ width: 185, backgroundColor: T.bg, borderRight: `1.5px solid ${T.border}`, padding: "13px 9px", flexShrink: 0 }}>
+        <div style={{ width: 205, backgroundColor: T.bgSidebar, borderRight: `1px solid ${T.border}`, padding: "13px 9px", flexShrink: 0 }}>
           {sections.map(s => (
-            <button key={s.id} onClick={() => setSection(s.id)} style={{
-              width: "100%", textAlign: "left", fontFamily: FONT, fontSize: 13,
-              fontWeight: section === s.id ? 700 : 500, padding: "9px 13px", borderRadius: 10,
-              border: "none", backgroundColor: section === s.id ? "#7F77DD18" : "transparent",
-              color: section === s.id ? "#7F77DD" : T.textSoft, cursor: "pointer", marginBottom: 3, display: "block",
-            }}>
+            <button key={s.id} onClick={() => { setSection(s.id); if (s.id === "miembros") ensureMemberUsers(); }}
+              style={{ width: "100%", textAlign: "left", fontFamily: FONT, fontSize: 13, fontWeight: section === s.id ? 700 : 500, padding: "9px 13px", borderRadius: 10, border: "none", backgroundColor: section === s.id ? T.accentSoft : "transparent", color: section === s.id ? T.accent : T.textSoft, cursor: "pointer", marginBottom: 3, display: "block" }}>
               {s.label}
             </button>
           ))}
         </div>
 
-        {/* Content */}
         <div style={{ flex: 1, padding: "22px 26px", overflowY: "auto" }}>
 
-          {section === "usuarios" && (
+          {/* ── EMPRESA ── */}
+          {section === "empresa" && (
             <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Usuarios</h2>
-                <Btn variant="primary" onClick={() => setShowUserModal(true)}>+ Añadir</Btn>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>
+                Configuración de empresa — {company.name}
+              </h2>
+
+              <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginBottom: 16 }}>
+                <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>Retención de logs (días)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={companySettings?.log_retention_days ?? 30}
+                  onChange={e => updateCompanySettings({ log_retention_days: Math.max(1, parseInt(e.target.value) || 1) })}
+                  style={{ ...inp, width: "100%", margin: "6px 0 12px" }}
+                />
+                <label style={{ fontSize: 12, color: T.textSoft, fontWeight: 600 }}>Retención de backups</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={companySettings?.backup_retention_count ?? 10}
+                  onChange={e => updateCompanySettings({ backup_retention_count: Math.max(1, parseInt(e.target.value) || 1) })}
+                  style={{ ...inp, width: "100%", margin: "6px 0 12px" }}
+                />
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: T.text }}>
+                  <input
+                    type="checkbox"
+                    checked={companySettings?.backup_enabled ?? true}
+                    onChange={e => updateCompanySettings({ backup_enabled: e.target.checked })}
+                  />
+                  Backups automáticos activos
+                </label>
               </div>
-              {users.map(u => (
-                <div key={u.id} style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: "11px 15px", display: "flex", alignItems: "center", gap: 11, marginBottom: 7 }}>
-                  <Avatar user={u} size={36} />
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>{u.name}</p>
-                    <p style={{ margin: 0, fontSize: 11, color: T.textSoft, fontFamily: FONT }}>{u.email}</p>
-                  </div>
-                  <div onClick={() => toggleRole(u.id)} style={{
-                    padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                    fontFamily: FONT, cursor: "pointer",
-                    background: u.role === "MASTER" ? "#7F77DD22" : "#F1EFE8",
-                    color: u.role === "MASTER" ? "#7F77DD" : "#5F5E5A",
-                    border: `1.5px solid ${u.role === "MASTER" ? "#7F77DD44" : T.border}`,
-                  }}>{u.role}</div>
-                  <Btn variant="danger" onClick={() => removeUser(u.id)} style={{ fontSize: 11, padding: "4px 9px" }}>Eliminar</Btn>
+
+              <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginBottom: 16 }}>
+                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: T.text }}>Backup manual</p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    value={companyBackupSummary}
+                    onChange={e => setCompanyBackupSummary(e.target.value)}
+                    placeholder="Resumen"
+                    style={{ ...inp, flex: 1, minWidth: 160 }}
+                  />
+                  <Btn variant="primary" onClick={handleCreateBackup}>Crear backup</Btn>
                 </div>
-              ))}
+                {!!companyBackupFeedback && (
+                  <p style={{ margin: "7px 0 0", fontSize: 11, color: T.success }}>{companyBackupFeedback}</p>
+                )}
+              </div>
+
+              <div>
+                <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>
+                  Backups disponibles ({companyBackups.length})
+                </h3>
+                {companyBackups.length === 0 && (
+                  <p style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT }}>Sin backups aún.</p>
+                )}
+                {companyBackups.map(b => (
+                  <div key={b.id} style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${T.border}`, padding: "9px 13px", marginBottom: 6 }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, fontFamily: FONT, color: T.text }}>{b.summary}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 10, color: T.textSoft, fontFamily: FONT }}>
+                      {new Date(b.created_at).toLocaleString("es-ES")}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
+          {/* ── MIEMBROS ── */}
+          {section === "miembros" && activeProjectId && (
+            <div>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>
+                Miembros del proyecto{project ? ` — ${project.name}` : ""}
+              </h2>
+
+              {projectMembers.length === 0 && (
+                <p style={{ fontSize: 13, color: T.textSoft, fontFamily: FONT, fontStyle: "italic" }}>Sin miembros asignados aún.</p>
+              )}
+
+              {projectMembers.map(member => {
+                const user = memberUsers.find(u => u.id === member.user_id);
+                return (
+                  <div key={member.id} style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: "11px 15px", display: "flex", alignItems: "center", gap: 11, marginBottom: 7 }}>
+                    {user && <Avatar user={user} size={36} />}
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>{user?.name || member.user_id}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: T.textSoft, fontFamily: FONT }}>{user?.email || ""}</p>
+                    </div>
+                    {canManageProject ? (
+                      <select value={member.role} onChange={e => handleChangeRole(member.user_id, e.target.value as ProjectRole)}
+                        style={{ ...inp, fontSize: 12, padding: "3px 7px", width: "auto" }}>
+                        {(Object.keys(ROLE_LABELS) as ProjectRole[]).map(r => (
+                          <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, fontFamily: FONT, background: T.accentSoft, color: T.accent, border: `1px solid ${T.accent}44` }}>
+                        {ROLE_LABELS[member.role]}
+                      </span>
+                    )}
+                    {canManageProject && member.user_id !== currentUser.id && (
+                      <Btn variant="danger" onClick={() => handleRemoveMember(member.user_id)} style={{ fontSize: 11, padding: "4px 9px" }}>Quitar</Btn>
+                    )}
+                  </div>
+                );
+              })}
+
+              {canManageProject && (
+                <div style={{ backgroundColor: T.bg, borderRadius: 13, border: `1.5px solid ${T.border}`, padding: 14, marginTop: 14 }}>
+                  <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, fontFamily: FONT, color: T.text }}>Añadir miembro</p>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <input value={memberEmail} onChange={e => setMemberEmail(e.target.value)}
+                      placeholder="email@empresa.com" style={{ ...inp, flex: 1, minWidth: 160 }} />
+                    <select value={memberRole} onChange={e => setMemberRole(e.target.value as ProjectRole)}
+                      style={{ ...inp, width: "auto" }}>
+                      {(Object.keys(ROLE_LABELS) as ProjectRole[]).map(r => (
+                        <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                      ))}
+                    </select>
+                    <Btn variant="primary" onClick={handleAddMember}>Añadir</Btn>
+                  </div>
+                  {!!memberFeedback && (
+                    <p style={{ margin: "7px 0 0", fontSize: 11, color: T.success, fontFamily: FONT }}>{memberFeedback}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── FUNCIONALIDADES ── */}
+          {section === "funcionalidades" && activeProjectId && (
+            <div>
+              <h2 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Funcionalidades activas</h2>
+              <p style={{ margin: "0 0 18px", fontSize: 12, color: T.textSoft, fontFamily: FONT }}>
+                Las funcionalidades desactivadas no son visibles, pero sus datos se siguen registrando.
+                Las marcadas como obligatorias no se pueden desactivar.
+              </p>
+
+              {featureCatalog.length === 0 && (
+                // Fallback cuando no se ha cargado el catálogo: mostrar las flags actuales
+                Object.entries(featureFlags).map(([key, enabled]) => (
+                  <div key={key} style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${T.border}`, padding: "11px 15px", display: "flex", alignItems: "center", gap: 11, marginBottom: 7 }}>
+                    <Toggle on={enabled} onChange={v => canManageCompany && handleFeatureToggle(key, v)} />
+                    <span style={{ fontSize: 13, fontWeight: 600, fontFamily: FONT, color: T.text, flex: 1, textTransform: "capitalize" }}>{key.replace(/_/g, " ")}</span>
+                  </div>
+                ))
+              )}
+
+              {featureCatalog.map(feature => {
+                const isOn = featureFlags[feature.key] ?? feature.default_on;
+                return (
+                  <div key={feature.key} style={{ backgroundColor: T.bg, borderRadius: 11, border: `1.5px solid ${feature.is_mandatory ? `${T.accent}44` : T.border}`, padding: "11px 15px", display: "flex", alignItems: "center", gap: 11, marginBottom: 7 }}>
+                    <Toggle on={isOn} onChange={v => canManageCompany && !feature.is_mandatory && handleFeatureToggle(feature.key, v)} />
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, fontFamily: FONT, color: T.text }}>{feature.label}</p>
+                      {feature.description && <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSoft, fontFamily: FONT }}>{feature.description}</p>}
+                    </div>
+                    {feature.is_mandatory && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.accentSoft, borderRadius: 20, padding: "2px 8px", border: `1px solid ${T.accent}33` }}>
+                        OBLIGATORIO
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── ESTADOS ── */}
           {section === "estados" && (
             <div>
               <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Estados</h2>
@@ -204,7 +465,7 @@ export function SettingsPage({
                     <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
                       <div style={{ width: 10, height: 10, borderRadius: "50%", background: pm.color, flexShrink: 0 }} />
                       <span style={{ fontSize: 13, fontWeight: 700, fontFamily: FONT, color: pm.color }}>{pm.label}</span>
-                      <div style={{ flex: 1, height: 1, background: pm.color + "33" }} />
+                      <div style={{ flex: 1, height: 1, background: `${pm.color}33` }} />
                       <span style={{ fontSize: 11, color: T.textSoft, fontFamily: FONT }}>{phaseStates.length} estado{phaseStates.length !== 1 ? "s" : ""}</span>
                     </div>
                     {!phaseStates.length && <p style={{ fontSize: 12, color: T.textSoft, fontFamily: FONT, fontStyle: "italic", marginLeft: 20 }}>Sin estados</p>}
@@ -234,6 +495,7 @@ export function SettingsPage({
             </div>
           )}
 
+          {/* ── COLUMNAS ── */}
           {section === "columnas" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
@@ -279,7 +541,7 @@ export function SettingsPage({
                             const pm = PHASE_META[s.phase] || PHASE_META.pre;
                             return (
                               <span key={s.id} onClick={() => updateCol(c.id, { state_ids: assigned ? c.state_ids.filter(id => id !== s.id) : [...(c.state_ids || []), s.id] })}
-                                style={{ fontSize: 11, fontWeight: 600, fontFamily: FONT, padding: "3px 10px", borderRadius: 20, cursor: "pointer", background: assigned ? pm.color + "22" : T.bgSoft, color: assigned ? pm.color : T.textSoft, border: `1.5px solid ${assigned ? pm.color + "55" : T.border}` }}>
+                                style={{ fontSize: 11, fontWeight: 600, fontFamily: FONT, padding: "3px 10px", borderRadius: 20, cursor: "pointer", background: assigned ? `${pm.color}22` : T.bgSoft, color: assigned ? pm.color : T.textSoft, border: `1.5px solid ${assigned ? `${pm.color}55` : T.border}` }}>
                                 {s.name}
                               </span>
                             );
@@ -302,6 +564,7 @@ export function SettingsPage({
             </div>
           )}
 
+          {/* ── CATEGORIAS ── */}
           {section === "categorias" && (
             <div>
               <h2 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Categorías</h2>
@@ -319,6 +582,7 @@ export function SettingsPage({
             </div>
           )}
 
+          {/* ── CAMPOS ── */}
           {section === "campos" && (
             <div>
               <h2 style={{ margin: "0 0 5px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Campos visibles en el modal</h2>
@@ -332,18 +596,19 @@ export function SettingsPage({
             </div>
           )}
 
+          {/* ── ACCESO ── */}
           {section === "acceso" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Acceso</h2>
+              <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: T.text }}>Acceso al tablero</h2>
               {([
-                { key: "public"       as const, label: "Acceso público por URL",   desc: "Cualquier persona con el enlace puede ver el tablero." },
-                { key: "requireLogin" as const, label: "Requiere autenticación",   desc: "Solo los miembros pueden acceder." },
+                { key: "public" as const, label: "Acceso público por URL", desc: "Cualquier persona con el enlace puede ver el tablero." },
+                { key: "requireLogin" as const, label: "Requiere autenticación", desc: "Solo miembros autenticados con acceso pueden entrar." },
               ]).map(opt => (
                 <div key={opt.key} onClick={() => updateBoardConfig({ [opt.key]: !board.board_config?.[opt.key] })}
-                  style={{ backgroundColor: T.bg, borderRadius: 13, border: `2px solid ${board.board_config?.[opt.key] ? "#7F77DD" : T.border}`, padding: "13px 15px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, marginBottom: 9 }}>
+                  style={{ backgroundColor: T.bg, borderRadius: 13, border: `2px solid ${board.board_config?.[opt.key] ? T.accent : T.border}`, padding: "13px 15px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, marginBottom: 9 }}>
                   <Toggle on={!!board.board_config?.[opt.key]} onChange={() => {}} />
                   <div>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, fontFamily: FONT, color: board.board_config?.[opt.key] ? "#7F77DD" : T.text }}>{opt.label}</p>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, fontFamily: FONT, color: board.board_config?.[opt.key] ? T.accent : T.text }}>{opt.label}</p>
                     <p style={{ margin: "2px 0 0", fontSize: 12, fontFamily: FONT, color: T.textSoft }}>{opt.desc}</p>
                   </div>
                 </div>

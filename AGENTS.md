@@ -1,4 +1,4 @@
-# Claude Code â€” Kanban Pro
+# Codex â€” Kanban Pro
 
 ## Registro de funcionalidades
 

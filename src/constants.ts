@@ -1,4 +1,6 @@
-export const FONT = "'Montserrat', sans-serif";
+export const FONT = "'Plus Jakarta Sans', 'Inter Tight', sans-serif";
+
+export const SUPER_ADMIN_EMAIL = "bkasero@gmail.com";
 
 export const PHASE_COLORS: Record<string, string> = {
   pre:  "#888780",

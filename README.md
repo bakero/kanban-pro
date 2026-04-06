@@ -71,3 +71,8 @@ export default defineConfig([
   },
 ])
 ```
+
+## Revisión técnica reciente
+
+- Ver recomendaciones de optimización y editabilidad IA en `docs/OPTIMIZACION_Y_EDITABILIDAD_IA.md`.
+

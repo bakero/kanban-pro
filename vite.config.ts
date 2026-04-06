@@ -50,4 +50,12 @@ function fileWriterPlugin(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), fileWriterPlugin()],
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        admin: resolve(__dirname, 'admin.html'),
+      },
+    },
+  },
 })

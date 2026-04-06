@@ -1,90 +1,738 @@
+import type { User as AuthUser } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import { DEFAULT_VISIBLE } from "../constants";
-import { histEntry } from "./utils";
-import type { User, Board, BoardState, BoardColumn, Card, AppData, Improvement } from "../types";
+import { DEFAULT_VISIBLE, SUPER_ADMIN_EMAIL } from "../constants";
+import { histEntry, nameInitials, strColor, uid } from "./utils";
+import type {
+  User,
+  Company,
+  CompanyMember,
+  CompanyInvite,
+  Workspace,
+  Project,
+  ProjectMember,
+  Feature,
+  CompanyFeature,
+  ProjectFeature,
+  FeatureFlags,
+  Board,
+  BoardState,
+  BoardColumn,
+  Card,
+  BoardLog,
+  Improvement,
+  ImprovementVote,
+  BoardInvite,
+  AppData,
+  AdminConsoleData,
+  AdminBoardSummary,
+  CompanySettings,
+  CompanyBackup,
+  CompanyRole,
+  ProjectRole,
+} from "../types";
 
-// ─── Seed data ────────────────────────────────────────────
+const DEFAULT_BOARD_CONFIG = { public: false, requireLogin: true, hideDoneAfterDays: 0 };
 
-const SEED_USERS: User[] = [
-  { id: "u1", name: "Ana García",  email: "ana@empresa.com",    initials: "AG", color: "#7F77DD", role: "MASTER" },
-  { id: "u2", name: "Carlos Ruiz", email: "carlos@empresa.com", initials: "CR", color: "#1D9E75", role: "USER"   },
-  { id: "u3", name: "María López", email: "maria@empresa.com",  initials: "ML", color: "#D85A30", role: "USER"   },
-  { id: "u4", name: "Pedro Sanz",  email: "pedro@empresa.com",  initials: "PS", color: "#378ADD", role: "USER"   },
-];
+// ============================================================
+// AUTH & USER
+// ============================================================
 
-const SEED_BOARD: Board = {
-  id: "b1", title: "Mi tablero", prefix: "MIT", card_seq: 5,
-  board_config: { public: false, requireLogin: true, hideDoneAfterDays: 0 },
-  visible_fields: DEFAULT_VISIBLE,
-  categories: ["Frontend","Backend","Diseño","QA","DevOps","Producto"],
-};
+export async function ensureUserProfile(authUser: AuthUser): Promise<User> {
+  const email = authUser.email || "";
+  const fullName =
+    authUser.user_metadata?.full_name ||
+    authUser.user_metadata?.name ||
+    email.split("@")[0] ||
+    "Usuario";
+  const providerList = Array.isArray(authUser.app_metadata?.providers) ? authUser.app_metadata.providers as string[] : [];
+  const isGoogleUser = providerList.includes("google");
 
-const SEED_STATES: BoardState[] = [
-  { id: "st1", board_id: "b1", name: "Pendiente",  phase: "pre",  is_discard: false, sort_order: 0 },
-  { id: "st2", board_id: "b1", name: "En curso",   phase: "work", is_discard: false, sort_order: 1 },
-  { id: "st3", board_id: "b1", name: "Revisión",   phase: "work", is_discard: false, sort_order: 2 },
-  { id: "st4", board_id: "b1", name: "Completado", phase: "post", is_discard: false, sort_order: 3 },
-  { id: "st5", board_id: "b1", name: "Descartado", phase: "post", is_discard: true,  sort_order: 4 },
-];
-
-const SEED_COLS: BoardColumn[] = [
-  { id: "c1", board_id: "b1", name: "Por hacer",   phase: "pre",  state_ids: ["st1"],       wip_limit: 0, is_wip: false, sort_order: 0 },
-  { id: "c2", board_id: "b1", name: "En progreso", phase: "work", state_ids: ["st2","st3"], wip_limit: 3, is_wip: true,  sort_order: 1 },
-  { id: "c3", board_id: "b1", name: "Hecho",       phase: "post", state_ids: ["st4"],       wip_limit: 0, is_wip: false, sort_order: 2 },
-  { id: "c4", board_id: "b1", name: "Descartado",  phase: "post", state_ids: ["st5"],       wip_limit: 0, is_wip: false, sort_order: 3 },
-];
-
-function makeSeedCard(id: string, cardId: string, colId: string, stateId: string, extra: Partial<Card>): Card {
-  return {
-    id, card_id: cardId, board_id: "b1", col_id: colId, state_id: stateId,
-    title: "Nueva tarjeta", type: "tarea", category: "Frontend",
-    due_date: "", blocked: false, creator_id: "u1",
-    description: "", attachments: [], comments: [],
-    history: [histEntry("Tarjeta creada", SEED_USERS[0])],
-    depends_on: [], blocked_by: [], time_per_col: {},
-    col_since: Date.now(), created_at: new Date().toISOString(),
-    completed_at: null, discarded_at: null,
-    ...extra,
+  const profile: User = {
+    id: authUser.id,
+    auth_user_id: authUser.id,
+    name: fullName,
+    email,
+    initials: nameInitials(fullName),
+    color: strColor(email || authUser.id),
+    role: "MASTER",
+    avatar_url: authUser.user_metadata?.avatar_url || null,
+    google_login_enabled: isGoogleUser,
+    google_confirmed_at: authUser.email_confirmed_at || new Date().toISOString(),
+    activation_email_sent_at: null,
   };
+
+  const { error } = await supabase.from("users").upsert(profile);
+  if (error) console.error("ensureUserProfile error:", error);
+  return profile;
 }
 
-const SEED_CARDS: Card[] = [
-  makeSeedCard("k1","MIT-001","c1","st1",{ title:"Diseñar nueva homepage", type:"tarea", category:"Diseño",   due_date:"2026-04-01", creator_id:"u3", description:"Rediseño completo.", created_at: new Date(Date.now()-172800000).toISOString(), col_since: Date.now()-172800000 }),
-  makeSeedCard("k2","MIT-002","c1","st1",{ title:"API de autenticación",   type:"bug",   category:"Backend",  due_date:"2026-03-20", creator_id:"u2", description:"OAuth2 con JWT.", blocked:true, created_at: new Date(Date.now()-86400000).toISOString(), col_since: Date.now()-86400000 }),
-  makeSeedCard("k3","MIT-003","c2","st2",{ title:"Tests unitarios pago",   type:"tarea", category:"QA",       due_date:"2026-03-25", creator_id:"u4", description:"80% cobertura.", created_at: new Date(Date.now()-259200000).toISOString(), col_since: Date.now()-259200000 }),
-  makeSeedCard("k4","MIT-004","c3","st4",{ title:"Deploy producción v2.1", type:"epica", category:"DevOps",   due_date:"2026-03-20", creator_id:"u1", description:"Despliegue v2.1.", created_at: new Date(Date.now()-518400000).toISOString(), col_since: Date.now()-3600000, completed_at: new Date(Date.now()-3600000).toISOString(), time_per_col:{"c1":86400000,"c2":172800000} }),
-];
+export async function sendGoogleActivationEmail(email: string) {
+  const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
+  });
+  if (error) throw error;
 
-// ─── DB helpers ───────────────────────────────────────────
-
-export async function seedIfEmpty() {
-  const { data } = await supabase.from("boards").select("id").limit(1);
-  if (data && data.length > 0) return;
-  await supabase.from("users").upsert(SEED_USERS);
-  await supabase.from("boards").upsert([SEED_BOARD]);
-  await supabase.from("board_states").upsert(SEED_STATES);
-  await supabase.from("board_columns").upsert(SEED_COLS);
-  await supabase.from("cards").upsert(SEED_CARDS);
+  const { error: updateError } = await supabase
+    .from("users")
+    .update({ activation_email_sent_at: new Date().toISOString() })
+    .eq("email", email);
+  if (updateError) console.error("sendGoogleActivationEmail update error:", updateError);
 }
 
-export async function loadAll(boardId: string): Promise<AppData> {
-  const [u, b, s, c, k] = await Promise.all([
-    supabase.from("users").select("*"),
-    supabase.from("boards").select("*"),
-    supabase.from("board_states").select("*").eq("board_id", boardId).order("sort_order"),
-    supabase.from("board_columns").select("*").eq("board_id", boardId).order("sort_order"),
-    supabase.from("cards").select("*").eq("board_id", boardId),
+export async function saveUser(user: User) {
+  const { error } = await supabase.from("users").upsert(user);
+  if (error) console.error("saveUser error:", error);
+}
+
+// ============================================================
+// COMPANY INVITES — aceptar invitaciones pendientes al login
+// ============================================================
+
+export async function acceptPendingCompanyInvites(user: User) {
+  const { data: invites } = await supabase
+    .from("company_invites")
+    .select("*")
+    .eq("email", user.email)
+    .eq("status", "pending");
+
+  const pending = (invites || []) as CompanyInvite[];
+  if (!pending.length) return;
+
+  const primaryInvite = pending[0];
+
+  await supabase
+    .from("company_members")
+    .delete()
+    .eq("user_id", user.id)
+    .neq("company_id", primaryInvite.company_id);
+
+  const memberships: CompanyMember[] = [primaryInvite].map(invite => ({
+    id: uid(),
+    company_id: invite.company_id,
+    user_id: user.id,
+    role: invite.role,
+    invited_by: invite.invited_by,
+    created_at: new Date().toISOString(),
+  }));
+
+  const { error: memberError } = await supabase.from("company_members").upsert(memberships, { onConflict: "company_id,user_id" });
+  if (memberError) console.error("acceptPendingCompanyInvites member error:", memberError);
+
+  const inviteIds = pending.map(i => i.id);
+  const { error: inviteError } = await supabase
+    .from("company_invites")
+    .update({ status: "accepted", accepted_at: new Date().toISOString() })
+    .in("id", inviteIds);
+  if (inviteError) console.error("acceptPendingCompanyInvites invite error:", inviteError);
+}
+
+export async function acceptPendingInvites(user: User) {
+  await acceptPendingCompanyInvites(user);
+}
+
+// ============================================================
+// COMPANY
+// ============================================================
+
+export async function createCompany(
+  name: string,
+  slug: string,
+  contactEmail: string,
+  createdBy: string
+): Promise<Company> {
+  const company: Company = {
+    id: uid(),
+    name,
+    slug: slug.toLowerCase().replace(/\s+/g, "-"),
+    contact_email: contactEmail,
+    license_plan: "trial",
+    created_by: createdBy,
+    created_at: new Date().toISOString(),
+    is_active: true,
+  };
+  const { error } = await supabase.from("companies").insert(company);
+  if (error) throw error;
+  const settings: CompanySettings = {
+    company_id: company.id,
+    log_retention_days: 30,
+    backup_retention_count: 10,
+    backup_enabled: true,
+    updated_at: new Date().toISOString(),
+  };
+  await supabase.from("company_settings").upsert(settings, { onConflict: "company_id" });
+  return company;
+}
+
+export async function loadUserCompanies(userId: string): Promise<{ company: Company; role: CompanyRole }[]> {
+  // Super admin ve todas
+  const { data: userRow } = await supabase.from("users").select("email").eq("id", userId).maybeSingle();
+  if ((userRow as { email?: string } | null)?.email === SUPER_ADMIN_EMAIL) {
+    const { data } = await supabase.from("companies").select("*").order("name");
+    return ((data || []) as Company[]).map(c => ({ company: c, role: "company_admin" as CompanyRole }));
+  }
+
+  const { data: memberships } = await supabase
+    .from("company_members")
+    .select("company_id, role")
+    .eq("user_id", userId);
+
+  if (!memberships?.length) return [];
+
+  const companyIds = (memberships as Array<{ company_id: string; role: string }>).map(m => m.company_id);
+  const { data: companies } = await supabase.from("companies").select("*").in("id", companyIds);
+
+  const roleMap = new Map((memberships as Array<{ company_id: string; role: string }>).map(m => [m.company_id, m.role as CompanyRole]));
+  return ((companies || []) as Company[]).map(c => ({ company: c, role: roleMap.get(c.id) || "member" }));
+}
+
+export async function loadAllCompanies(): Promise<Company[]> {
+  const { data } = await supabase.from("companies").select("*").order("name");
+  return (data || []) as Company[];
+}
+
+export async function updateCompany(company: Company) {
+  const { error } = await supabase.from("companies").update(company).eq("id", company.id);
+  if (error) console.error("updateCompany error:", error);
+}
+
+export async function loadCompanySettings(companyId: string): Promise<CompanySettings | null> {
+  const { data } = await supabase
+    .from("company_settings")
+    .select("*")
+    .eq("company_id", companyId)
+    .maybeSingle();
+  return (data || null) as CompanySettings | null;
+}
+
+export async function saveCompanySettings(settings: CompanySettings) {
+  const { error } = await supabase
+    .from("company_settings")
+    .upsert(settings, { onConflict: "company_id" });
+  if (error) console.error("saveCompanySettings error:", error);
+}
+
+// ============================================================
+// COMPANY MEMBERS
+// ============================================================
+
+export async function loadCompanyMembers(companyId: string): Promise<CompanyMember[]> {
+  const { data } = await supabase
+    .from("company_members")
+    .select("*, user:users(*)")
+    .eq("company_id", companyId)
+    .order("created_at");
+  return (data || []) as CompanyMember[];
+}
+
+export async function inviteUserToCompany(
+  companyId: string,
+  email: string,
+  role: CompanyRole,
+  invitedBy: string
+): Promise<CompanyInvite> {
+  const invite: CompanyInvite = {
+    id: uid(),
+    company_id: companyId,
+    email: email.trim().toLowerCase(),
+    role,
+    invited_by: invitedBy,
+    status: "pending",
+    created_at: new Date().toISOString(),
+    accepted_at: null,
+  };
+  const { error } = await supabase.from("company_invites").upsert(invite, { onConflict: "company_id,email" });
+  if (error) throw error;
+  return invite;
+}
+
+export async function loadCompanyInvites(companyId: string): Promise<CompanyInvite[]> {
+  const { data } = await supabase
+    .from("company_invites")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false });
+  return (data || []) as CompanyInvite[];
+}
+
+export async function updateCompanyMemberRole(companyId: string, userId: string, role: CompanyRole) {
+  const { error } = await supabase
+    .from("company_members")
+    .update({ role })
+    .eq("company_id", companyId)
+    .eq("user_id", userId);
+  if (error) console.error("updateCompanyMemberRole error:", error);
+}
+
+export async function removeCompanyMember(companyId: string, userId: string) {
+  const { error } = await supabase
+    .from("company_members")
+    .delete()
+    .eq("company_id", companyId)
+    .eq("user_id", userId);
+  if (error) console.error("removeCompanyMember error:", error);
+}
+
+export async function assignUserToCompany(companyId: string, userId: string, role: CompanyRole, invitedBy: string) {
+  await supabase
+    .from("company_members")
+    .delete()
+    .eq("user_id", userId)
+    .neq("company_id", companyId);
+
+  const member: CompanyMember = {
+    id: uid(),
+    company_id: companyId,
+    user_id: userId,
+    role,
+    invited_by: invitedBy,
+    created_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("company_members").upsert(member, { onConflict: "company_id,user_id" });
+  if (error) console.error("assignUserToCompany error:", error);
+}
+
+export async function revokeCompanyInvite(inviteId: string) {
+  const { error } = await supabase.from("company_invites").delete().eq("id", inviteId);
+  if (error) console.error("revokeCompanyInvite error:", error);
+}
+
+// ============================================================
+// WORKSPACES
+// ============================================================
+
+export async function createWorkspace(
+  companyId: string,
+  name: string,
+  createdBy: string,
+  description?: string
+): Promise<Workspace> {
+  const { data: existing } = await supabase
+    .from("workspaces")
+    .select("sort_order")
+    .eq("company_id", companyId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  const nextOrder = (((existing || [])[0] as { sort_order?: number } | undefined)?.sort_order ?? -1) + 1;
+
+  const ws: Workspace = {
+    id: uid(),
+    company_id: companyId,
+    name,
+    description,
+    created_by: createdBy,
+    created_at: new Date().toISOString(),
+    sort_order: nextOrder,
+  };
+  const { error } = await supabase.from("workspaces").insert(ws);
+  if (error) throw error;
+  return ws;
+}
+
+export async function getOrCreateWorkspace(companyId: string, createdBy: string, name = "Principal"): Promise<Workspace> {
+  const { data } = await supabase.from("workspaces").select("*").eq("company_id", companyId).order("sort_order").limit(1);
+  const existing = (data || [])[0] as Workspace | undefined;
+  if (existing) return existing;
+  return createWorkspace(companyId, name, createdBy, "Workspace principal");
+}
+
+export async function loadWorkspaces(companyId: string): Promise<Workspace[]> {
+  const { data } = await supabase
+    .from("workspaces")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("sort_order");
+  return (data || []) as Workspace[];
+}
+
+export async function updateWorkspace(workspace: Workspace) {
+  const { error } = await supabase.from("workspaces").update(workspace).eq("id", workspace.id);
+  if (error) console.error("updateWorkspace error:", error);
+}
+
+export async function deleteWorkspace(workspaceId: string) {
+  const { error } = await supabase.from("workspaces").delete().eq("id", workspaceId);
+  if (error) console.error("deleteWorkspace error:", error);
+}
+
+// ============================================================
+// PROJECTS
+// ============================================================
+
+export async function createProject(
+  workspaceId: string,
+  name: string,
+  prefix: string,
+  createdBy: string,
+  description?: string
+): Promise<Project> {
+  const { data: existing } = await supabase
+    .from("projects")
+    .select("sort_order")
+    .eq("workspace_id", workspaceId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  const nextOrder = (((existing || [])[0] as { sort_order?: number } | undefined)?.sort_order ?? -1) + 1;
+
+  const project: Project = {
+    id: uid(),
+    workspace_id: workspaceId,
+    name,
+    description,
+    prefix: prefix.toUpperCase(),
+    created_by: createdBy,
+    created_at: new Date().toISOString(),
+    sort_order: nextOrder,
+    is_archived: false,
+  };
+  const { error } = await supabase.from("projects").insert(project);
+  if (error) throw error;
+  return project;
+}
+
+export async function loadProjects(workspaceId: string): Promise<Project[]> {
+  const { data } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("is_archived", false)
+    .order("sort_order");
+  return (data || []) as Project[];
+}
+
+export async function loadAllCompanyProjects(companyId: string): Promise<Project[]> {
+  const { data: wss } = await supabase.from("workspaces").select("id").eq("company_id", companyId);
+  const wsIds = ((wss || []) as Array<{ id: string }>).map(w => w.id);
+  if (!wsIds.length) return [];
+
+  const { data } = await supabase
+    .from("projects")
+    .select("*")
+    .in("workspace_id", wsIds)
+    .eq("is_archived", false)
+    .order("sort_order");
+  return (data || []) as Project[];
+}
+
+export async function loadCompanyBoards(companyId: string): Promise<Board[]> {
+  const { data } = await supabase.from("boards").select("*").eq("company_id", companyId).order("created_at");
+  return (data || []) as Board[];
+}
+
+export async function loadCompanyCards(companyId: string): Promise<Card[]> {
+  const { data: boardIds } = await supabase.from("boards").select("id").eq("company_id", companyId);
+  const ids = (boardIds || []).map((b: { id: string }) => b.id);
+  if (!ids.length) return [];
+  const { data } = await supabase.from("cards").select("*").in("board_id", ids);
+  return (data || []) as Card[];
+}
+
+export async function loadCompanyImprovements(companyId: string): Promise<Improvement[]> {
+  return loadImprovements(companyId);
+}
+
+export async function updateProject(project: Project) {
+  const { error } = await supabase.from("projects").update(project).eq("id", project.id);
+  if (error) console.error("updateProject error:", error);
+}
+
+export async function archiveProject(projectId: string) {
+  const { error } = await supabase.from("projects").update({ is_archived: true }).eq("id", projectId);
+  if (error) console.error("archiveProject error:", error);
+}
+
+// ============================================================
+// PROJECT MEMBERS
+// ============================================================
+
+export async function loadProjectMembers(projectId: string): Promise<ProjectMember[]> {
+  const { data } = await supabase
+    .from("project_members")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at");
+  return (data || []) as ProjectMember[];
+}
+
+export async function addProjectMember(
+  projectId: string,
+  userId: string,
+  role: ProjectRole,
+  assignedBy: string
+) {
+  const member: ProjectMember = {
+    id: uid(),
+    project_id: projectId,
+    user_id: userId,
+    role,
+    assigned_by: assignedBy,
+    created_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("project_members").upsert(member, { onConflict: "project_id,user_id" });
+  if (error) throw error;
+}
+
+export async function updateProjectMemberRole(projectId: string, userId: string, role: ProjectRole) {
+  const { error } = await supabase
+    .from("project_members")
+    .update({ role })
+    .eq("project_id", projectId)
+    .eq("user_id", userId);
+  if (error) console.error("updateProjectMemberRole error:", error);
+}
+
+export async function removeProjectMember(projectId: string, userId: string) {
+  const { error } = await supabase
+    .from("project_members")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("user_id", userId);
+  if (error) console.error("removeProjectMember error:", error);
+}
+
+// ============================================================
+// FEATURE FLAGS
+// ============================================================
+
+export async function loadFeatureCatalog(): Promise<Feature[]> {
+  const { data } = await supabase.from("features").select("*").order("sort_order");
+  return (data || []) as Feature[];
+}
+
+export async function loadCompanyFeatures(companyId: string): Promise<CompanyFeature[]> {
+  const { data } = await supabase.from("company_features").select("*").eq("company_id", companyId);
+  return (data || []) as CompanyFeature[];
+}
+
+export async function resolveCompanyFeatureFlags(companyId: string): Promise<FeatureFlags> {
+  const [catalog, overrides] = await Promise.all([
+    loadFeatureCatalog(),
+    loadCompanyFeatures(companyId),
   ]);
-  return {
-    users:   (u.data || []) as User[],
-    boards:  (b.data || []) as Board[],
-    states:  (s.data || []) as BoardState[],
-    columns: (c.data || []) as BoardColumn[],
-    cards:   (k.data || []) as Card[],
-  };
+
+  const overrideMap = new Map(overrides.map(o => [o.feature_key, o.is_enabled]));
+  const flags: FeatureFlags = {};
+  for (const feature of catalog) {
+    if (feature.is_mandatory) flags[feature.key] = true;
+    else if (overrideMap.has(feature.key)) flags[feature.key] = overrideMap.get(feature.key)!;
+    else flags[feature.key] = feature.default_on;
+  }
+  return flags;
 }
 
-export async function saveCard(card: Card) {
+export async function setCompanyFeature(
+  companyId: string,
+  featureKey: string,
+  isEnabled: boolean,
+  updatedBy: string
+) {
+  const row: CompanyFeature = {
+    id: uid(),
+    company_id: companyId,
+    feature_key: featureKey,
+    is_enabled: isEnabled,
+    updated_by: updatedBy,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase
+    .from("company_features")
+    .upsert(row, { onConflict: "company_id,feature_key" });
+  if (error) console.error("setCompanyFeature error:", error);
+}
+export async function loadProjectFeatures(projectId: string): Promise<ProjectFeature[]> {
+  const { data } = await supabase.from("project_features").select("*").eq("project_id", projectId);
+  return (data || []) as ProjectFeature[];
+}
+
+export async function resolveFeatureFlags(projectId: string): Promise<FeatureFlags> {
+  const [catalog, overrides] = await Promise.all([
+    loadFeatureCatalog(),
+    loadProjectFeatures(projectId),
+  ]);
+  const overrideMap = new Map(overrides.map(o => [o.feature_key, o.is_enabled]));
+
+  const flags: FeatureFlags = {};
+  for (const feature of catalog) {
+    if (feature.is_mandatory) {
+      flags[feature.key] = true;
+    } else if (overrideMap.has(feature.key)) {
+      flags[feature.key] = overrideMap.get(feature.key)!;
+    } else {
+      flags[feature.key] = feature.default_on;
+    }
+  }
+  return flags;
+}
+
+export async function setProjectFeature(
+  projectId: string,
+  featureKey: string,
+  isEnabled: boolean,
+  updatedBy: string
+) {
+  const row: ProjectFeature = {
+    id: uid(),
+    project_id: projectId,
+    feature_key: featureKey,
+    is_enabled: isEnabled,
+    updated_by: updatedBy,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase
+    .from("project_features")
+    .upsert(row, { onConflict: "project_id,feature_key" });
+  if (error) console.error("setProjectFeature error:", error);
+}
+
+export async function updateFeatureCatalog(feature: Feature) {
+  const { error } = await supabase.from("features").update(feature).eq("id", feature.id);
+  if (error) console.error("updateFeatureCatalog error:", error);
+}
+
+// ============================================================
+// BOARDS
+// ============================================================
+
+export async function loadBoardsForProject(projectId: string): Promise<Board[]> {
+  const { data } = await supabase
+    .from("boards")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("sort_order");
+  return (data || []) as Board[];
+}
+
+export async function saveBoard(board: Board, actorUserId?: string) {
+  const payload: Record<string, unknown> = {
+    id: board.id,
+    company_id: board.company_id,
+    title: board.title,
+    prefix: board.prefix,
+    card_seq: board.card_seq,
+    owner_user_id: board.owner_user_id,
+    board_config: board.board_config,
+    visible_fields: board.visible_fields,
+    categories: board.categories,
+  };
+
+  if ("project_id" in board && board.project_id) payload.project_id = board.project_id;
+  if ("sort_order" in board && typeof board.sort_order !== "undefined") payload.sort_order = board.sort_order;
+  if ("created_at" in board && typeof board.created_at !== "undefined") payload.created_at = board.created_at;
+
+  const { error } = await supabase.from("boards").upsert(payload);
+  if (error) console.error("saveBoard error:", error);
+  if (!error && actorUserId) {
+    await logBoardChange({
+      company_id: board.company_id,
+      board_id: board.id,
+      user_id: actorUserId,
+      entity_id: board.id,
+      entity_type: "board",
+      change: "board_upsert",
+    });
+  }
+}
+
+// ============================================================
+// BOARD STATES / COLUMNS
+// ============================================================
+
+export async function saveColumn(col: BoardColumn, actorUserId?: string) {
+  const { error } = await supabase.from("board_columns").upsert(col);
+  if (error) console.error("saveColumn error:", error);
+  if (!error && actorUserId) {
+    const companyId = await resolveBoardCompany(col.board_id);
+    if (companyId) {
+      await logBoardChange({
+        company_id: companyId,
+        board_id: col.board_id,
+        user_id: actorUserId,
+        entity_id: col.id,
+        entity_type: "column",
+        change: "column_upsert",
+      });
+    }
+  }
+}
+
+export async function saveState(st: BoardState, actorUserId?: string) {
+  const { error } = await supabase.from("board_states").upsert(st);
+  if (error) console.error("saveState error:", error);
+  if (!error && actorUserId) {
+    const companyId = await resolveBoardCompany(st.board_id);
+    if (companyId) {
+      await logBoardChange({
+        company_id: companyId,
+        board_id: st.board_id,
+        user_id: actorUserId,
+        entity_id: st.id,
+        entity_type: "state",
+        change: "state_upsert",
+      });
+    }
+  }
+}
+
+export async function deleteColumn(id: string, actorUserId?: string) {
+  const { data: col } = await supabase.from("board_columns").select("board_id").eq("id", id).maybeSingle();
+  await supabase.from("board_columns").delete().eq("id", id);
+  await supabase.from("cards").delete().eq("col_id", id);
+  if (actorUserId && (col as { board_id?: string } | null)?.board_id) {
+    const boardId = (col as { board_id?: string }).board_id!;
+    const companyId = await resolveBoardCompany(boardId);
+    if (companyId) {
+      await logBoardChange({
+        company_id: companyId,
+        board_id: boardId,
+        user_id: actorUserId,
+        entity_id: id,
+        entity_type: "column",
+        change: "column_delete",
+      });
+    }
+  }
+}
+
+export async function deleteState(id: string, actorUserId?: string) {
+  const { data: st } = await supabase.from("board_states").select("board_id").eq("id", id).maybeSingle();
+  await supabase.from("board_states").delete().eq("id", id);
+  if (actorUserId && (st as { board_id?: string } | null)?.board_id) {
+    const boardId = (st as { board_id?: string }).board_id!;
+    const companyId = await resolveBoardCompany(boardId);
+    if (companyId) {
+      await logBoardChange({
+        company_id: companyId,
+        board_id: boardId,
+        user_id: actorUserId,
+        entity_id: id,
+        entity_type: "state",
+        change: "state_delete",
+      });
+    }
+  }
+}
+
+async function resolveBoardCompany(boardId: string): Promise<string | null> {
+  const { data } = await supabase.from("boards").select("company_id").eq("id", boardId).maybeSingle();
+  return (data as { company_id?: string } | null)?.company_id || null;
+}
+
+export async function logBoardChange(entry: Omit<BoardLog, "id" | "created_at">) {
+  const row: BoardLog = {
+    id: uid(),
+    ...entry,
+    created_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("board_logs").insert(row);
+  if (error) console.error("logBoardChange error:", error);
+}
+
+// ============================================================
+// CARDS
+// ============================================================
+
+export async function saveCard(card: Card, actorUserId?: string) {
   const { error } = await supabase.from("cards").upsert({
     id: card.id, card_id: card.card_id, board_id: card.board_id,
     col_id: card.col_id, state_id: card.state_id, title: card.title,
@@ -93,55 +741,550 @@ export async function saveCard(card: Card) {
     attachments: card.attachments, comments: card.comments, history: card.history,
     depends_on: card.depends_on, blocked_by: card.blocked_by,
     time_per_col: card.time_per_col, col_since: card.col_since,
+    created_at: card.created_at,
     completed_at: card.completed_at, discarded_at: card.discarded_at,
   });
   if (error) console.error("saveCard error:", error);
+  if (!error && actorUserId) {
+    const companyId = await resolveBoardCompany(card.board_id);
+    if (companyId) {
+      await logBoardChange({
+        company_id: companyId,
+        board_id: card.board_id,
+        user_id: actorUserId,
+        entity_id: card.id,
+        entity_type: "card",
+        change: "card_upsert",
+      });
+    }
+  }
 }
 
-export async function saveBoard(board: Board) {
-  const { error } = await supabase.from("boards").upsert(board);
-  if (error) console.error("saveBoard error:", error);
+// ============================================================
+// COMPOSITE LOADERS
+// ============================================================
+
+export async function loadProjectData(projectId: string): Promise<{
+  boards: Board[];
+  featureFlags: FeatureFlags;
+  projectMembers: ProjectMember[];
+  companyId: string | null;
+}> {
+  const { data: projectRow } = await supabase
+    .from("projects")
+    .select("workspace_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  const workspaceId = (projectRow as { workspace_id?: string } | null)?.workspace_id || null;
+  let companyId: string | null = null;
+  if (workspaceId) {
+    const { data: ws } = await supabase.from("workspaces").select("company_id").eq("id", workspaceId).maybeSingle();
+    companyId = (ws as { company_id?: string } | null)?.company_id || null;
+  }
+
+  const [boards, projectMembers, featureFlags] = await Promise.all([
+    loadBoardsForProject(projectId),
+    loadProjectMembers(projectId),
+    companyId ? resolveCompanyFeatureFlags(companyId) : resolveFeatureFlags(projectId),
+  ]);
+  return { boards, featureFlags, projectMembers, companyId };
 }
 
-export async function saveColumn(col: BoardColumn) {
-  const { error } = await supabase.from("board_columns").upsert(col);
-  if (error) console.error("saveColumn error:", error);
+export async function loadBoardData(boardId: string): Promise<{
+  states: BoardState[];
+  columns: BoardColumn[];
+  cards: Card[];
+  users: User[];
+}> {
+  const [statesRes, columnsRes, cardsRes] = await Promise.all([
+    supabase.from("board_states").select("*").eq("board_id", boardId).order("sort_order"),
+    supabase.from("board_columns").select("*").eq("board_id", boardId).order("sort_order"),
+    supabase.from("cards").select("*").eq("board_id", boardId),
+  ]);
+
+  const cards = (cardsRes.data || []) as Card[];
+
+  // Cargar usuarios únicos que aparecen como creadores
+  const creatorIds = [...new Set(cards.map(c => c.creator_id).filter(Boolean))];
+  let users: User[] = [];
+  if (creatorIds.length) {
+    const { data } = await supabase.from("users").select("*").in("id", creatorIds);
+    users = (data || []) as User[];
+  }
+
+  return {
+    states: (statesRes.data || []) as BoardState[],
+    columns: (columnsRes.data || []) as BoardColumn[],
+    cards,
+    users,
+  };
 }
 
-export async function saveState(st: BoardState) {
-  const { error } = await supabase.from("board_states").upsert(st);
-  if (error) console.error("saveState error:", error);
+export async function loadCompanyLogs(companyId: string, limit = 200): Promise<BoardLog[]> {
+  const { data } = await supabase
+    .from("board_logs")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data || []) as BoardLog[];
 }
 
-export async function saveUser(user: User) {
-  const { error } = await supabase.from("users").upsert(user);
-  if (error) console.error("saveUser error:", error);
+export async function loadCompanyBackups(companyId: string): Promise<CompanyBackup[]> {
+  const { data } = await supabase
+    .from("company_backups")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false });
+  return (data || []) as CompanyBackup[];
 }
 
-export async function deleteUser(id: string) {
-  await supabase.from("users").delete().eq("id", id);
+export async function createCompanyBackup(companyId: string, createdBy: string, summary: string) {
+  const [projects, boardsRes, improvements, settings, features] = await Promise.all([
+    loadAllCompanyProjects(companyId),
+    supabase.from("boards").select("*").eq("company_id", companyId),
+    supabase.from("improvements").select("*").eq("company_id", companyId),
+    loadCompanySettings(companyId),
+    loadCompanyFeatures(companyId),
+  ]);
+
+  const boards = (boardsRes.data || []) as Board[];
+  const boardIds = boards.map(b => b.id);
+  const [statesRes, columnsRes, cardsRes] = boardIds.length
+    ? await Promise.all([
+        supabase.from("board_states").select("*").in("board_id", boardIds),
+        supabase.from("board_columns").select("*").in("board_id", boardIds),
+        supabase.from("cards").select("*").in("board_id", boardIds),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }];
+
+  const snapshot = {
+    projects,
+    boards,
+    states: (statesRes.data || []),
+    columns: (columnsRes.data || []),
+    cards: (cardsRes.data || []),
+    improvements: (improvements.data || []),
+    settings,
+    features,
+  };
+
+  const row: CompanyBackup = {
+    id: uid(),
+    company_id: companyId,
+    created_by: createdBy,
+    created_at: new Date().toISOString(),
+    summary,
+    snapshot,
+  };
+
+  const { error } = await supabase.from("company_backups").insert(row);
+  if (error) console.error("createCompanyBackup error:", error);
+
+  const settingsRow = settings || {
+    company_id: companyId,
+    log_retention_days: 30,
+    backup_retention_count: 10,
+    backup_enabled: true,
+    updated_at: new Date().toISOString(),
+  };
+
+  const backups = await loadCompanyBackups(companyId);
+  const keep = Math.max(1, settingsRow.backup_retention_count || 10);
+  const toDelete = backups.slice(keep);
+  if (toDelete.length) {
+    const ids = toDelete.map(b => b.id);
+    await supabase.from("company_backups").delete().in("id", ids);
+  }
 }
 
-export async function deleteColumn(id: string) {
-  await supabase.from("board_columns").delete().eq("id", id);
-  await supabase.from("cards").delete().eq("col_id", id);
+// Carga los usuarios de una empresa por sus membresías de proyecto
+export async function loadProjectUsers(projectId: string): Promise<User[]> {
+  const members = await loadProjectMembers(projectId);
+  if (!members.length) return [];
+  const userIds = members.map(m => m.user_id);
+  const { data } = await supabase.from("users").select("*").in("id", userIds);
+  return (data || []) as User[];
 }
 
-export async function deleteState(id: string) {
-  await supabase.from("board_states").delete().eq("id", id);
+export async function loadLegacyBoardApp(userId: string, preferredBoardId?: string | null): Promise<{
+  users: User[];
+  boards: Board[];
+  states: BoardState[];
+  columns: BoardColumn[];
+  cards: Card[];
+  activeBoardId: string | null;
+}> {
+  const { data: boardsRes, error } = await supabase.from("boards").select("*").order("created_at");
+  if (error) {
+    console.error("loadLegacyBoardApp boards error:", error);
+    return { users: [], boards: [], states: [], columns: [], cards: [], activeBoardId: null };
+  }
+
+  const boards = (boardsRes || []) as Board[];
+  const activeBoard = boards.find(board => board.id === preferredBoardId) || boards[0] || null;
+
+  if (!activeBoard) {
+    return { users: [], boards: [], states: [], columns: [], cards: [], activeBoardId: null };
+  }
+
+  const data = await loadBoardData(activeBoard.id);
+  const mergedUsers = Array.from(
+    new Map(
+      [
+        ...data.users,
+        ...(data.cards.map(card => ({ id: card.creator_id } as User))),
+      ].map(user => [user.id, user])
+    ).values()
+  ).filter(Boolean) as User[];
+
+  if (!mergedUsers.some(user => user.id === userId)) {
+    const { data: currentUser } = await supabase.from("users").select("*").eq("id", userId).maybeSingle();
+    if (currentUser) mergedUsers.unshift(currentUser as User);
+  }
+
+  return {
+    users: mergedUsers,
+    boards,
+    states: data.states,
+    columns: data.columns,
+    cards: data.cards,
+    activeBoardId: activeBoard.id,
+  };
 }
+
+export async function loadAll(userId: string, preferredBoardId?: string | null): Promise<AppData> {
+  const companyLinks = await loadUserCompanies(userId);
+  const company = companyLinks[0]?.company || null;
+
+  if (!company) {
+    return {
+      company: null,
+      workspaces: [],
+      projects: [],
+      activeWorkspaceId: null,
+      activeProjectId: null,
+      featureFlags: {},
+      users: [],
+      boards: [],
+      states: [],
+      columns: [],
+      cards: [],
+      invites: [],
+      activeBoardId: null,
+    };
+  }
+
+  const workspaces = await loadWorkspaces(company.id);
+  const activeWorkspaceId = workspaces[0]?.id || null;
+  const projects = activeWorkspaceId ? await loadProjects(activeWorkspaceId) : [];
+  const activeProjectId = projects[0]?.id || null;
+  const featureFlags = await resolveCompanyFeatureFlags(company.id);
+  let boards = activeProjectId ? await loadBoardsForProject(activeProjectId) : [];
+
+  if (!boards.length && activeProjectId) {
+    const { data: userRow } = await supabase.from("users").select("*").eq("id", userId).maybeSingle();
+    if (userRow) {
+      await seedBoardForProject(activeProjectId, userRow as User);
+      boards = await loadBoardsForProject(activeProjectId);
+    }
+  }
+
+  const activeBoard = boards.find(board => board.id === preferredBoardId) || boards[0] || null;
+  if (!activeBoard) {
+    return {
+      company,
+      workspaces,
+      projects,
+      activeWorkspaceId,
+      activeProjectId,
+      featureFlags,
+      users: [],
+      boards,
+      states: [],
+      columns: [],
+      cards: [],
+      invites: [],
+      activeBoardId: null,
+    };
+  }
+
+  const boardData = await loadBoardData(activeBoard.id);
+  const users = await loadProjectUsers(activeBoard.project_id);
+
+  return {
+    company,
+    workspaces,
+    projects,
+    activeWorkspaceId,
+    activeProjectId,
+    featureFlags,
+    users: users.length ? users : boardData.users,
+    boards,
+    states: boardData.states,
+    columns: boardData.columns,
+    cards: boardData.cards,
+    invites: [],
+    activeBoardId: activeBoard.id,
+  };
+}
+
+export async function inviteUserToBoard(boardId: string, email: string, invitedByUserId: string): Promise<BoardInvite> {
+  const invite: BoardInvite = {
+    id: uid(),
+    board_id: boardId,
+    email: email.trim().toLowerCase(),
+    invited_by_user_id: invitedByUserId,
+    status: "pending",
+    created_at: new Date().toISOString(),
+    accepted_at: null,
+  };
+
+  const { data: board } = await supabase.from("boards").select("project_id").eq("id", boardId).maybeSingle();
+  const projectId = (board as { project_id?: string } | null)?.project_id;
+  if (!projectId) return invite;
+
+  const { data: user } = await supabase.from("users").select("id").eq("email", invite.email).maybeSingle();
+  const invitedUserId = (user as { id?: string } | null)?.id;
+  if (invitedUserId) {
+    await addProjectMember(projectId, invitedUserId, "member", invitedByUserId);
+  }
+
+  return invite;
+}
+
+export async function removeBoardInvite(_inviteId: string) {
+  void _inviteId;
+  return;
+}
+
+export async function removeBoardMember(boardId: string, userId: string) {
+  const { data: board } = await supabase.from("boards").select("project_id").eq("id", boardId).maybeSingle();
+  const projectId = (board as { project_id?: string } | null)?.project_id;
+  if (!projectId) return;
+  await removeProjectMember(projectId, userId);
+}
+
+// ============================================================
+// SEED — tablero inicial para un proyecto nuevo
+// ============================================================
+
+function makeSeedCard(
+  id: string, cardId: string, boardId: string, userId: string,
+  colId: string, stateId: string, extra: Partial<Card>
+): Card {
+  return {
+    id, card_id: cardId, board_id: boardId, col_id: colId, state_id: stateId,
+    title: "Nueva tarjeta", type: "tarea", category: "General",
+    due_date: "", blocked: false, creator_id: userId,
+    description: "", attachments: [], comments: [],
+    history: [histEntry("Tarjeta creada")],
+    depends_on: [], blocked_by: [], time_per_col: {},
+    col_since: Date.now(), created_at: new Date().toISOString(),
+    completed_at: null, discarded_at: null,
+    ...extra,
+  };
+}
+
+export async function seedBoardForProject(projectId: string, user: User): Promise<Board> {
+  const boardId = uid();
+  const { data: projectRow } = await supabase.from("projects").select("workspace_id").eq("id", projectId).maybeSingle();
+  const workspaceId = (projectRow as { workspace_id?: string } | null)?.workspace_id || null;
+  let companyId = "";
+  if (workspaceId) {
+    const { data: ws } = await supabase.from("workspaces").select("company_id").eq("id", workspaceId).maybeSingle();
+    companyId = (ws as { company_id?: string } | null)?.company_id || "";
+  }
+  const board: Board = {
+    id: boardId,
+    company_id: companyId,
+    project_id: projectId,
+    title: "Tablero principal",
+    prefix: "TBL",
+    card_seq: 4,
+    owner_user_id: user.id,
+    board_config: DEFAULT_BOARD_CONFIG,
+    visible_fields: DEFAULT_VISIBLE,
+    categories: ["General", "Backend", "Frontend", "Producto"],
+    sort_order: 0,
+  };
+
+  const states: BoardState[] = [
+    { id: uid(), board_id: boardId, name: "Pendiente", phase: "pre", is_discard: false, sort_order: 0 },
+    { id: uid(), board_id: boardId, name: "En curso", phase: "work", is_discard: false, sort_order: 1 },
+    { id: uid(), board_id: boardId, name: "Completado", phase: "post", is_discard: false, sort_order: 2 },
+    { id: uid(), board_id: boardId, name: "Descartado", phase: "post", is_discard: true, sort_order: 3 },
+  ];
+
+  const columns: BoardColumn[] = [
+    { id: uid(), board_id: boardId, name: "Por hacer", phase: "pre", state_ids: [states[0].id], wip_limit: 0, is_wip: false, sort_order: 0 },
+    { id: uid(), board_id: boardId, name: "En progreso", phase: "work", state_ids: [states[1].id], wip_limit: 3, is_wip: true, sort_order: 1 },
+    { id: uid(), board_id: boardId, name: "Hecho", phase: "post", state_ids: [states[2].id], wip_limit: 0, is_wip: false, sort_order: 2 },
+    { id: uid(), board_id: boardId, name: "Descartado", phase: "post", state_ids: [states[3].id], wip_limit: 0, is_wip: false, sort_order: 3 },
+  ];
+
+  const cards: Card[] = [
+    makeSeedCard(uid(), "TBL-001", boardId, user.id, columns[0].id, states[0].id, {
+      title: "Configurar acceso inicial",
+      category: "General",
+      description: "Tablero creado automáticamente al crear el proyecto.",
+    }),
+    makeSeedCard(uid(), "TBL-002", boardId, user.id, columns[1].id, states[1].id, {
+      title: "Invitar a colaboradores",
+      category: "Producto",
+      description: "Desde Configuración > Miembros puedes añadir usuarios al proyecto.",
+    }),
+    makeSeedCard(uid(), "TBL-003", boardId, user.id, columns[2].id, states[2].id, {
+      title: "Revisar funcionalidades activas",
+      category: "Producto",
+      description: "Desde Configuración > Funcionalidades activa o desactiva features.",
+      completed_at: new Date().toISOString(),
+    }),
+  ];
+
+  await saveBoard(board);
+  await Promise.all(columns.map(col => saveColumn(col)));
+  await Promise.all(states.map(state => saveState(state)));
+  await Promise.all(cards.map(card => saveCard(card)));
+
+  return board;
+}
+
+export async function seedLegacyBoardForUser(user: User): Promise<Board> {
+  const boardId = uid();
+  const board = {
+    id: boardId,
+    title: "Mi tablero",
+    prefix: "KAN",
+    card_seq: 4,
+    owner_user_id: user.id,
+    board_config: DEFAULT_BOARD_CONFIG,
+    visible_fields: DEFAULT_VISIBLE,
+    categories: ["General", "Backend", "Frontend", "Producto"],
+    created_at: new Date().toISOString(),
+  } as Board;
+
+  const states: BoardState[] = [
+    { id: uid(), board_id: boardId, name: "Pendiente", phase: "pre", is_discard: false, sort_order: 0 },
+    { id: uid(), board_id: boardId, name: "En curso", phase: "work", is_discard: false, sort_order: 1 },
+    { id: uid(), board_id: boardId, name: "Completado", phase: "post", is_discard: false, sort_order: 2 },
+    { id: uid(), board_id: boardId, name: "Descartado", phase: "post", is_discard: true, sort_order: 3 },
+  ];
+
+  const columns: BoardColumn[] = [
+    { id: uid(), board_id: boardId, name: "Por hacer", phase: "pre", state_ids: [states[0].id], wip_limit: 0, is_wip: false, sort_order: 0 },
+    { id: uid(), board_id: boardId, name: "En progreso", phase: "work", state_ids: [states[1].id], wip_limit: 3, is_wip: true, sort_order: 1 },
+    { id: uid(), board_id: boardId, name: "Hecho", phase: "post", state_ids: [states[2].id], wip_limit: 0, is_wip: false, sort_order: 2 },
+    { id: uid(), board_id: boardId, name: "Descartado", phase: "post", state_ids: [states[3].id], wip_limit: 0, is_wip: false, sort_order: 3 },
+  ];
+
+  const cards: Card[] = [
+    makeSeedCard(uid(), "KAN-001", boardId, user.id, columns[0].id, states[0].id, {
+      title: "Configurar acceso inicial",
+      category: "General",
+      description: "Tablero personal creado automáticamente al iniciar sesión por primera vez.",
+    }),
+    makeSeedCard(uid(), "KAN-002", boardId, user.id, columns[1].id, states[1].id, {
+      title: "Revisar backlog de mejoras",
+      category: "Producto",
+      description: "Puedes proponer y votar mejoras desde la vista compartida.",
+    }),
+    makeSeedCard(uid(), "KAN-003", boardId, user.id, columns[2].id, states[2].id, {
+      title: "Explorar el tablero",
+      category: "Frontend",
+      description: "Mueve tarjetas entre columnas y abre su detalle para editar campos.",
+      completed_at: new Date().toISOString(),
+    }),
+  ];
+
+  await saveBoard(board);
+  await Promise.all(columns.map(col => saveColumn(col)));
+  await Promise.all(states.map(state => saveState(state)));
+  await Promise.all(cards.map(card => saveCard(card)));
+
+  return board;
+}
+
+// ============================================================
+// IMPROVEMENTS
+// ============================================================
 
 export async function saveImprovement(imp: Improvement) {
   const { error } = await supabase.from("improvements").upsert(imp);
   if (error) console.error("saveImprovement error:", error);
 }
 
-export async function loadImprovements(boardId: string): Promise<Improvement[]> {
-  const { data } = await supabase.from("improvements").select("*").eq("board_id", boardId).order("created_at", { ascending: false });
-  return (data || []) as Improvement[];
+export async function loadImprovements(companyId?: string, currentUserId?: string): Promise<Improvement[]> {
+  const [{ data: improvements }, { data: boards }, { data: votes }] = await Promise.all([
+    companyId
+      ? supabase.from("improvements").select("*").eq("company_id", companyId).order("created_at", { ascending: false })
+      : supabase.from("improvements").select("*").order("created_at", { ascending: false }),
+    companyId
+      ? supabase.from("boards").select("id,title").eq("company_id", companyId)
+      : supabase.from("boards").select("id,title"),
+    supabase.from("improvement_votes").select("*"),
+  ]);
+
+  const boardMap = new Map((boards || []).map((board: { id: string; title: string }) => [board.id, board.title]));
+  const voteRows = (votes || []) as ImprovementVote[];
+
+  return ((improvements || []) as Improvement[]).map(imp => {
+    const impVotes = voteRows.filter(v => v.improvement_id === imp.id);
+    return {
+      ...imp,
+      vote_count: impVotes.length,
+      current_user_voted: currentUserId ? impVotes.some(v => v.user_id === currentUserId) : false,
+      board_title: boardMap.get(imp.board_id) || null,
+    };
+  });
 }
 
 export async function markImprovementsAiPending(ids: string[]) {
   if (!ids.length) return;
   await supabase.from("improvements").update({ status: "ai_pending" }).in("id", ids);
+}
+
+export async function addImprovementVote(improvementId: string, userId: string) {
+  const vote: ImprovementVote = {
+    id: uid(),
+    improvement_id: improvementId,
+    user_id: userId,
+    created_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("improvement_votes").upsert(vote, { onConflict: "improvement_id,user_id" });
+  if (error) throw error;
+}
+
+export async function removeImprovementVote(improvementId: string, userId: string) {
+  const { error } = await supabase.from("improvement_votes").delete()
+    .eq("improvement_id", improvementId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function loadAdminConsoleData(currentUserId?: string): Promise<AdminConsoleData> {
+  const [usersRes, boardsRes, cardsRes, improvements] = await Promise.all([
+    supabase.from("users").select("*").order("name"),
+    supabase.from("boards").select("*").order("title"),
+    supabase.from("cards").select("board_id"),
+    loadImprovements(undefined, currentUserId),
+  ]);
+
+  const users = (usersRes.data || []) as User[];
+  const boards = (boardsRes.data || []) as Board[];
+  const cards = (cardsRes.data || []) as Array<{ board_id: string }>;
+
+  const userMap = new Map(users.map(user => [user.id, user]));
+  const boardSummaries: AdminBoardSummary[] = boards.map(board => ({
+    ...board,
+    owner_name: userMap.get(board.owner_user_id)?.name || null,
+    member_count: 0,
+    card_count: cards.filter(card => card.board_id === board.id).length,
+  }));
+
+  return {
+    users,
+    boards: boardSummaries,
+    improvements,
+  };
 }

@@ -3,13 +3,14 @@ import { useTheme } from "../hooks/useTheme";
 import { ImprovementModal } from "./ImprovementModal";
 
 interface ImprovementBtnProps {
+  companyId: string;
   boardId: string;
   userId: string;
   userName: string;
   context: string;
 }
 
-export function ImprovementBtn({ boardId, userId, userName, context }: ImprovementBtnProps) {
+export function ImprovementBtn({ companyId, boardId, userId, userName, context }: ImprovementBtnProps) {
   const T = useTheme();
   const [open, setOpen] = useState(false);
 
@@ -31,6 +32,7 @@ export function ImprovementBtn({ boardId, userId, userName, context }: Improveme
       </button>
       {open && (
         <ImprovementModal
+          companyId={companyId}
           boardId={boardId}
           userId={userId}
           userName={userName}

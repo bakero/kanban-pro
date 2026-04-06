@@ -8,6 +8,7 @@ import { Btn } from "./ui/Btn";
 import type { Improvement } from "../types";
 
 interface ImprovementModalProps {
+  companyId: string;
   boardId: string;
   userId: string;
   userName: string;
@@ -15,7 +16,7 @@ interface ImprovementModalProps {
   onClose: () => void;
 }
 
-export function ImprovementModal({ boardId, userId, userName, context, onClose }: ImprovementModalProps) {
+export function ImprovementModal({ companyId, boardId, userId, userName, context, onClose }: ImprovementModalProps) {
   const T = useTheme();
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
@@ -26,6 +27,7 @@ export function ImprovementModal({ boardId, userId, userName, context, onClose }
     setSaving(true);
     const imp: Improvement = {
       id: uid(),
+      company_id: companyId,
       board_id: boardId,
       user_id: userId,
       user_name: userName,
