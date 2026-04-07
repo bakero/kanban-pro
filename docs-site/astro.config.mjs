@@ -4,7 +4,6 @@ import mdx from "@astrojs/mdx";
 
 export default defineConfig({
   integrations: [
-    mdx(),
     starlight({
       title: "Kanban Pro Docs",
       description: "Documentacion funcional, requisitos y escenarios de prueba.",
@@ -34,5 +33,6 @@ export default defineConfig({
         },
       ],
     }),
+    mdx(),
   ],
 });
