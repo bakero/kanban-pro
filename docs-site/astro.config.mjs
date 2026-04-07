@@ -1,8 +1,10 @@
 ﻿import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import mdx from "@astrojs/mdx";
 
 export default defineConfig({
   integrations: [
+    mdx(),
     starlight({
       title: "Kanban Pro Docs",
       description: "Documentacion funcional, requisitos y escenarios de prueba.",
