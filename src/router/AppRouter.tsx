@@ -93,6 +93,12 @@ export function AppRouter() {
         }
       />
 
+      {/* Component configuration pages */}
+      <Route path="/config/components" element={<App />} />
+      <Route path="/config/components/:componentId" element={<App />} />
+      <Route path="/app/config/components" element={<App />} />
+      <Route path="/app/config/components/:componentId" element={<App />} />
+
       {/* Smart code resolver - MUST be last to avoid overriding specific routes */}
       <Route
         path="/:code"
