@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty false",
-    "check": "npm run typecheck && npm run lint"
+    "check": "npm run typecheck && npm run lint",
+    "test:regression": "echo \"No regression tests configured yet\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",

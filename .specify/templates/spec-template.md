@@ -95,6 +95,15 @@
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
 - **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
 
+## Componente principal afectado
+
+<!--
+  ACTION REQUIRED: Identify the single primary UI component or screen this spec changes.
+  If multiple components are affected, list the main one here and note others elsewhere.
+-->
+
+- [Ruta o componente principal, p. ej. "src/components/TopBar.tsx"]
+
 ### Key Entities *(include if feature involves data)*
 
 - **[Entity 1]**: [What it represents, key attributes without implementation]
@@ -126,3 +135,23 @@
 - [Assumption about scope boundaries, e.g., "Mobile support is out of scope for v1"]
 - [Assumption about data/environment, e.g., "Existing authentication system will be reused"]
 - [Dependency on existing system/service, e.g., "Requires access to the existing user profile API"]
+
+## Criterios de aceptacion
+
+<!--
+  ACTION REQUIRED: Define concise, testable acceptance criteria.
+  These should be specific enough that two implementations converge.
+-->
+
+- [AC-001: criterio verificable]
+- [AC-002: criterio verificable]
+
+## Pruebas
+
+<!--
+  ACTION REQUIRED: Provide concrete test steps that an AI can execute
+  after implementing the feature.
+-->
+
+1. [Paso de prueba 1]
+2. [Paso de prueba 2]
