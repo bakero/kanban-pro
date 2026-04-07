@@ -155,3 +155,15 @@
 
 1. [Paso de prueba 1]
 2. [Paso de prueba 2]
+
+## Resultado de pruebas (post-implementacion)
+
+<!--
+  ACTION REQUIRED: Complete after implementation.
+  Include execution date, environment, and a concise summary of results.
+-->
+
+- Fecha:
+- Entorno:
+- Resumen:
+- Detalle:

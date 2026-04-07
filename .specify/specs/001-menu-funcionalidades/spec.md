@@ -36,3 +36,9 @@ Sin ocupar mucho espacio en la pantalla, el usuario tendra todas las opciones de
 2. Iniciar sesion con un usuario no autorizado y verificar que Consola Empresa no aparece.
 3. Abrir el dropdown, comprobar orden de opciones y cerrar con click fuera y con Esc.
 4. Seleccionar cada opcion y verificar la navegacion/accion: /perfil, /admin, nueva pestana a https://kanban-pro-docs.vercel.app/, y logout con redireccion a https://kanban-incrzyulw-kanban-pro.vercel.app/.
+
+## Resultado de pruebas (post-implementacion)
+- Fecha:
+- Entorno:
+- Resumen:
+- Detalle:
