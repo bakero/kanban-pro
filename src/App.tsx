@@ -41,6 +41,8 @@ import { KCard } from "./components/KCard";
 import { LoginPage } from "./components/LoginPage";
 import { NewKanbanModal } from "./components/NewKanbanModal";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { ComponentSettingsListPage } from "./components/settings/ComponentSettingsListPage";
+import { ComponentSettingsPage } from "./components/settings/ComponentSettingsPage";
 import { SuperAdminPage } from "./components/admin/SuperAdminPage";
 import { CompanyAdminPage } from "./admin/CompanyAdminPage";
 import { PhaseLegend } from "./components/layout/PhaseLegend";
@@ -64,14 +66,14 @@ import type {
   Workspace,
 } from "./types";
 import { LangContext, translate, type Lang, type TranslationKey } from "./i18n";
-type AppPage = "board" | "settings" | "improvements" | "admin" | "company-admin";
+type AppPage = "board" | "settings" | "improvements" | "admin" | "company-admin" | "component-settings-list" | "component-settings";
 
 export default function App() {
   const prefersDark = usePrefersDark();
   const location = useLocation();
   const navigate = useNavigate();
   const basePath = location.pathname.startsWith("/app") ? "/app" : "";
-  const { boardNumericId, workspaceNumericId, openCardId, companyId, workspaceId, projectId, boardId, cardId } = useParams<{
+  const { boardNumericId, workspaceNumericId, openCardId, companyId, workspaceId, projectId, boardId, cardId, componentId } = useParams<{
     boardNumericId?: string;
     workspaceNumericId?: string;
     openCardId?: string;
@@ -80,6 +82,7 @@ export default function App() {
     projectId?: string;
     boardId?: string;
     cardId?: string;
+    componentId?: string;
   }>();
 
   const [lang, setLang] = useState<Lang>("es");
@@ -183,6 +186,17 @@ export default function App() {
     if (!currentUser?.lang) return;
     setLang(currentUser.lang as Lang);
   }, [currentUser?.lang]);
+
+  useEffect(() => {
+    const isComponentRoute = location.pathname.includes("/config/components");
+    if (isComponentRoute) {
+      setPage(componentId ? "component-settings" : "component-settings-list");
+      return;
+    }
+    if (page === "component-settings" || page === "component-settings-list") {
+      setPage("board");
+    }
+  }, [location.pathname, componentId, page]);
 
   useEffect(() => {
     const config = (currentUser?.ui_config as { secondaryBar?: string[] } | undefined)?.secondaryBar;
@@ -878,6 +892,14 @@ export default function App() {
         </div>
       </div>,
     );
+  }
+
+  if (page === "component-settings-list") {
+    return withTheme(<ComponentSettingsListPage basePath={basePath} />);
+  }
+
+  if (page === "component-settings" && componentId) {
+    return withTheme(<ComponentSettingsPage basePath={basePath} componentId={componentId} />);
   }
 
   if (page === "admin" && isSuperAdmin && currentUser) {

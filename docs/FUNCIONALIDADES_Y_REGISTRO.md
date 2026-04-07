@@ -194,6 +194,21 @@ Usa este bloque cada vez que se implemente una funcionalidad nueva. La idea es d
 
 ---
 
+### Paginas de configuracion por componente
+- Estado: `implementada`
+- Fecha: 2026-04-07
+- Objetivo: garantizar que cada componente de negocio y cada componente UI reutilizable tenga su propia pagina de configuracion accesible por URL.
+- Pantalla o contexto: rutas `/config/components` y `/config/components/:componentId` dentro de la app principal.
+- Tipo: `UI` | `logica`
+- Descripcion funcional: se publica un catalogo de componentes y una pagina de detalle por componente, con resumen, ruta de archivo y espacio de configuracion dedicado.
+- Funcionamiento: la app detecta rutas de configuracion y muestra un listado de componentes (negocio y UI) con acceso a su pagina individual. Cada pagina muestra el detalle del componente y un bloque de configuracion base.
+- Reglas de negocio: todas las entradas del catalogo tienen URL propia; si un componente no existe se muestra mensaje de no encontrado.
+- Impacto en usuario: el equipo puede localizar rapidamente donde configurar o ampliar cada componente sin buscar en el codigo.
+- Archivos principales: `src/components/settings/componentCatalog.ts`, `src/components/settings/ComponentSettingsListPage.tsx`, `src/components/settings/ComponentSettingsPage.tsx`, `src/router/AppRouter.tsx`, `src/App.tsx`.
+- Notas tecnicas: las rutas se resuelven dentro de `App` para reutilizar autenticacion y tema.
+
+---
+
 ### Internacionalizacion por usuario (ES/EN)
 - Estado: `implementada`
 - Fecha: 2026-04-06
