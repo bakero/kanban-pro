@@ -3,6 +3,9 @@ title: Consola de empresa
 description: Gestion del tenant para admins.
 ---
 
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
 ## Objetivo
 Permitir a admins de empresa gestionar recursos propios.
 
@@ -20,5 +23,6 @@ Permitir a admins de empresa gestionar recursos propios.
 1. Acceso con rol company_admin y validacion de datos.
 
 ## Ultima ejecucion
-- Preview: pendiente
-- Produccion: pendiente
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />

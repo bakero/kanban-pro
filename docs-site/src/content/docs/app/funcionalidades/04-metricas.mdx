@@ -3,6 +3,9 @@ title: Seguimiento y metricas
 description: Indicadores de rendimiento del tablero.
 ---
 
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
 ## Objetivo
 Ofrecer metricas clave del flujo de trabajo.
 
@@ -22,5 +25,6 @@ Ofrecer metricas clave del flujo de trabajo.
 2. Activar burnup/burndown y verificar render.
 
 ## Ultima ejecucion
-- Preview: pendiente
-- Produccion: pendiente
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />

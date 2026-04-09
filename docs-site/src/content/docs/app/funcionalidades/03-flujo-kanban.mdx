@@ -3,6 +3,9 @@ title: Flujo Kanban y movimiento de trabajo
 description: Movimiento entre columnas y estados.
 ---
 
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
 ## Objetivo
 Garantizar el flujo visual y operativo de tarjetas entre fases.
 
@@ -25,5 +28,6 @@ Garantizar el flujo visual y operativo de tarjetas entre fases.
 2. Descartar tarjeta y exigir justificacion.
 
 ## Ultima ejecucion
-- Preview: pendiente
-- Produccion: pendiente
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />
