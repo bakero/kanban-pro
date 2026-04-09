@@ -3,6 +3,9 @@ title: Dependencias y contexto de tarjeta
 description: Relaciones entre tarjetas.
 ---
 
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
 ## Objetivo
 Relacionar tarjetas por dependencias y bloqueos.
 
@@ -22,5 +25,6 @@ Relacionar tarjetas por dependencias y bloqueos.
 2. Resolver dependencia y validar estado.
 
 ## Ultima ejecucion
-- Preview: pendiente
-- Produccion: pendiente
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />

@@ -3,6 +3,9 @@ title: Sistema de mejoras por empresa
 description: Backlog de mejoras y votos.
 ---
 
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
 ## Objetivo
 Centralizar propuestas y votos de mejoras por empresa.
 
@@ -22,5 +25,6 @@ Centralizar propuestas y votos de mejoras por empresa.
 2. Votar y retirar voto.
 
 ## Ultima ejecucion
-- Preview: pendiente
-- Produccion: pendiente
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />

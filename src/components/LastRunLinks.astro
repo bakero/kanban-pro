@@ -1,0 +1,9 @@
+---
+import lastRuns from "../content/docs/qa/last-runs.json";
+
+const label = Astro.props.label || "Ultima ejecucion";
+const key = Astro.props.key || "regression_master";
+const value = lastRuns[key] || "pendiente";
+---
+
+<p><strong>{label}:</strong> {value === "pendiente" ? "pendiente" : <a href={value}>{value}</a>}</p>

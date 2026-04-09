@@ -3,6 +3,9 @@ title: Consola de administracion multi-tenant
 description: Gestion global de empresas y recursos.
 ---
 
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
 ## Objetivo
 Ofrecer una consola global para el super admin.
 
@@ -22,5 +25,6 @@ Ofrecer una consola global para el super admin.
 2. Aprobar mejora y validar estado ai_pending.
 
 ## Ultima ejecucion
-- Preview: pendiente
-- Produccion: pendiente
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />

@@ -3,6 +3,9 @@ title: Filtros de trabajo
 description: Filtrado de tarjetas en el tablero.
 ---
 
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
 ## Objetivo
 Permitir filtrar el trabajo por criterios clave.
 
@@ -21,5 +24,6 @@ Permitir filtrar el trabajo por criterios clave.
 2. Combinar filtros y limpiar todo.
 
 ## Ultima ejecucion
-- Preview: pendiente
-- Produccion: pendiente
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />

@@ -3,6 +3,9 @@ title: Logs y backups por empresa
 description: Registro de actividad y copias de seguridad.
 ---
 
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
 ## Objetivo
 Registrar cambios y respaldos por empresa.
 
@@ -21,5 +24,6 @@ Registrar cambios y respaldos por empresa.
 2. Comprobar retencion de logs configurada.
 
 ## Ultima ejecucion
-- Preview: pendiente
-- Produccion: pendiente
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />

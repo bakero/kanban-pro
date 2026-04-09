@@ -5,6 +5,13 @@
 **Status**: Draft  
 **Input**: User description: "$ARGUMENTS"
 
+## Metadatos de spec *(mandatory)*
+
+- **Componente principal**: [Ruta o componente principal, p. ej. "src/components/KCard.tsx"]
+- **Docs funcional**: [Ruta MDX en /docs-site, p. ej. "docs-site/src/content/docs/app/funcionalidades/02-gestion-tarjetas.mdx"]
+- **Docs tecnico**: [Ruta MDX en /docs-site si aplica]
+- **Specs relacionadas**: [IDs o rutas de specs previas, si aplica]
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -192,6 +199,11 @@
 
 1. [Paso de prueba 1]
 2. [Paso de prueba 2]
+
+### Pruebas de regresion *(si aplica)*
+
+- Marca en Playwright con `@regression` los escenarios que deben correr siempre en `master`.
+- Lista aqui los tests marcados (nombre exacto del test).
 
 ## Resultado de pruebas (post-implementacion)
 

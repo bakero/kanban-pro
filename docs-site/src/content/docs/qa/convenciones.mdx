@@ -12,6 +12,14 @@ description: Como redactar requisitos y escenarios de prueba.
 - Pasos
 - Resultado esperado
 
+## Regresion
+- Marca los tests de regresion con `@regression` en el titulo.
+- Estos tests se ejecutan siempre en `master` con Playwright.
+
+## Specs y componentes
+- Cada spec debe completar **Componente principal** en la plantilla.
+- Para listar specs por componente: `node scripts/specs-by-component.mjs`
+
 ## Ejemplo
 - Requisito: El usuario puede crear una tarjeta con titulo obligatorio.
 - Escenario:

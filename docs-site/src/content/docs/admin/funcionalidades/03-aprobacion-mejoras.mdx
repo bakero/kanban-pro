@@ -3,6 +3,9 @@ title: Aprobacion de mejoras
 description: Flujo de aprobacion hacia IA.
 ---
 
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
 ## Objetivo
 Controlar que mejoras pasan a estado ai_pending.
 
@@ -20,5 +23,6 @@ Controlar que mejoras pasan a estado ai_pending.
 1. Aprobar mejora y verificar estado ai_pending.
 
 ## Ultima ejecucion
-- Preview: pendiente
-- Produccion: pendiente
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />

@@ -3,6 +3,9 @@ title: Consola global
 description: Gestion multi-tenant para super admin.
 ---
 
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
 ## Objetivo
 Gestionar empresas, usuarios, proyectos, tableros y trabajos.
 
@@ -20,5 +23,6 @@ Gestionar empresas, usuarios, proyectos, tableros y trabajos.
 1. Acceso con super admin y navegacion entre secciones.
 
 ## Ultima ejecucion
-- Preview: pendiente
-- Produccion: pendiente
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />
