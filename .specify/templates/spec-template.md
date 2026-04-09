@@ -95,6 +95,16 @@
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
 - **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
 
+### Non-Functional Requirements
+
+<!--
+  ACTION REQUIRED: Define performance, reliability, accessibility, and security needs.
+-->
+
+- **NFR-001**: [Performance requirement]
+- **NFR-002**: [Accessibility requirement]
+- **NFR-003**: [Security requirement]
+
 ## Componente principal afectado
 
 <!--
@@ -103,6 +113,33 @@
 -->
 
 - [Ruta o componente principal, p. ej. "src/components/TopBar.tsx"]
+
+## Reutilizacion o creacion de componentes
+
+<!--
+  ACTION REQUIRED: Indicate whether an existing component will be reused or a new one created.
+  If new, specify the target folder and file name.
+-->
+
+- [Reutilizar componente existente: <nombre/ruta>]
+- [Nuevo componente: <ruta completa>]
+
+## Ruta de pantalla (si aplica)
+
+<!--
+  ACTION REQUIRED: If this introduces a new screen, specify the route.
+-->
+
+- [Ruta: /ruta/nueva]
+
+## Carga de datos
+
+<!--
+  ACTION REQUIRED: Specify async/sync loading and loading animation behavior.
+-->
+
+- Tipo: [sincrona | asincrona]
+- Indicador de carga: [si/no], [tipo de animacion o placeholder]
 
 ### Key Entities *(include if feature involves data)*
 
@@ -167,3 +204,15 @@
 - Entorno:
 - Resumen:
 - Detalle:
+
+## Documentacion (post-implementacion)
+
+<!--
+  ACTION REQUIRED: Update /docs-site with functional, technical, and latest integration test results.
+  Include a link back to the spec that created the feature.
+-->
+
+- Documentacion funcional actualizada en /docs-site: [ruta]
+- Documentacion tecnica actualizada en /docs-site: [ruta]
+- Ultimas pruebas de integracion en /docs-site: [ruta]
+- Enlace a la spec: [ruta relativa]

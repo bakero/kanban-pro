@@ -16,8 +16,28 @@ Documentacion abre https://kanban-pro-docs.vercel.app/ en una pestana nueva.
 Cerrar sesion hace logout y redirige a https://kanban-incrzyulw-kanban-pro.vercel.app/.
 Un usuario esta autorizado a Consola Empresa si companies.owner_user_email coincide con users.email para la empresa actual; la empresa actual es la del usuario que invita (se copia su empresa) salvo bkasero@gmail.com, que debe seleccionar empresa existente o crear una nueva antes de continuar.
 
+## Requisitos funcionales
+- FR-001: El boton de menu debe abrir un dropdown con opciones del menu.
+- FR-002: Cada opcion debe ejecutar su accion correspondiente (navegacion o logout).
+- FR-003: Consola Empresa solo debe mostrarse a usuarios autorizados.
+
+## Requisitos no funcionales
+- NFR-001: El menu debe ser accesible con teclado (Tab, Enter, Esc, flechas).
+- NFR-002: El dropdown debe mostrarse sobre cualquier elemento en pantalla (z-index alto).
+
 ## Componente principal afectado
 - src/App.tsx (Header)
+
+## Reutilizacion o creacion de componentes
+- Reutilizar componente existente: menu en header actual dentro de src/App.tsx.
+- Nuevo componente: por definir si se extrae un componente dedicado (pendiente).
+
+## Ruta de pantalla (si aplica)
+- N/A (no es una pantalla nueva).
+
+## Carga de datos
+- Tipo: sincrona.
+- Indicador de carga: no aplica.
 
 ## Impacto en el usuario
 Sin ocupar mucho espacio en la pantalla, el usuario tendra todas las opciones de menu centralizadas en un unico punto, siempre visible y accesible tambien con teclado.
@@ -42,3 +62,9 @@ Sin ocupar mucho espacio en la pantalla, el usuario tendra todas las opciones de
 - Entorno:
 - Resumen:
 - Detalle:
+
+## Documentacion (post-implementacion)
+- Documentacion funcional actualizada en /docs-site: pendiente.
+- Documentacion tecnica actualizada en /docs-site: pendiente.
+- Ultimas pruebas de integracion en /docs-site: pendiente.
+- Enlace a la spec: .specify/specs/001-menu-funcionalidades/spec.md
