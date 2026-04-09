@@ -3,6 +3,8 @@ title: Ejecuciones de pruebas
 description: Registro de ejecuciones recientes y convenciones de enlaces.
 ---
 
+import lastRuns from "./last-runs.json";
+
 ## Fuentes de ejecucion
 - Preview de Vercel (pull requests)
 - Produccion (manual o programado)
@@ -18,3 +20,8 @@ Formato sugerido en cada pagina:
 
 ## Actualizacion
 Este bloque se actualiza con el enlace del ultimo run valido.
+
+## Ultimas ejecuciones registradas
+- Regression (master): {lastRuns.regression_master || "pendiente"}
+- Preview E2E: {lastRuns.preview_e2e || "pendiente"}
+- Produccion E2E: {lastRuns.production_e2e || "pendiente"}

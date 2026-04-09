@@ -5,6 +5,9 @@ on:
     branches: [ master ]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   app:
     runs-on: ubuntu-latest
@@ -46,3 +49,18 @@ jobs:
       - run: npm install
       - run: npx playwright install --with-deps
       - run: npm run test:regression --if-present
+      - name: Update last run link
+        env:
+          LAST_RUN_KEY: regression_master
+        run: node scripts/update-last-runs.mjs
+      - name: Commit last run link
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions"
+            git config user.email "github-actions@github.com"
+            git add docs-site/src/content/docs/qa/last-runs.json
+            git commit -m "chore(docs): update last run link"
+            git push
+          else
+            echo "No last run changes"
+          fi
