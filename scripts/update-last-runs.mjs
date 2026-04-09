@@ -15,7 +15,8 @@ if (!fs.existsSync(jsonPath)) {
 }
 
 const raw = fs.readFileSync(jsonPath, "utf8");
-const data = raw.trim() ? JSON.parse(raw) : {};
+const cleaned = raw.replace(/^\uFEFF/, "");
+const data = cleaned.trim() ? JSON.parse(cleaned) : {};
 
 const next = {
   ...data,
