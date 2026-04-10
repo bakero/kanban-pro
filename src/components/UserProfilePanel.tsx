@@ -1,6 +1,7 @@
 ﻿import { useMemo, useRef, useState } from "react";
 import type { User } from "../types";
 import { useTheme } from "../hooks/useTheme";
+import type { ThemeMode } from "../hooks/useTheme";
 import { Avatar } from "./ui/Avatar";
 import { getUserFirstName, getUserLastName, nameInitials } from "../lib/utils";
 import { updateUserProfile, uploadAvatar } from "../lib/db";
@@ -12,11 +13,13 @@ interface UserProfilePanelProps {
   user: User;
   isOpen: boolean;
   isMobile: boolean;
+  themeMode: ThemeMode;
+  onThemeChange: (mode: ThemeMode) => void;
   onClose: () => void;
   onSaved: (user: User) => void;
 }
 
-export function UserProfilePanel({ user, isOpen, isMobile, onClose, onSaved }: UserProfilePanelProps) {
+export function UserProfilePanel({ user, isOpen, isMobile, themeMode, onThemeChange, onClose, onSaved }: UserProfilePanelProps) {
   const T = useTheme();
   const { t } = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -109,6 +112,18 @@ export function UserProfilePanel({ user, isOpen, isMobile, onClose, onSaved }: U
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={e => handleFileChange(e.target.files?.[0] || null)} />
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: T.textSoft }}>{t("theme.title")}</span>
+            <select
+              value={themeMode}
+              onChange={e => onThemeChange(e.target.value as ThemeMode)}
+              style={{ borderRadius: 10, border: `1px solid ${T.border}`, padding: "9px 10px", background: T.bgElevated, color: T.text }}
+            >
+              <option value="system">{t("theme.system")}</option>
+              <option value="light">{t("theme.light")}</option>
+              <option value="dark">{t("theme.dark")}</option>
+            </select>
+          </label>
           <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span style={{ fontSize: 12, color: T.textSoft }}>{t("profile.firstName")}</span>
             <input

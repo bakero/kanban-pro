@@ -22,6 +22,7 @@
   "theme.system": "Tema sistema",
   "theme.light": "Modo claro",
   "theme.dark": "Modo oscuro",
+  "theme.title": "Tema",
 
   "menu.metrics": "Métricas",
   "menu.improvements": "Mejoras",
@@ -41,6 +42,7 @@
   "menu.openAdminConsole": "Abrir consola de administración",
   "menu.theme": "Tema",
   "menu.menu": "Menú",
+  "menu.searchPlaceholder": "Buscar...",
 
   "app.noCompanyTitle": "No estás asignado a una empresa.",
   "app.noCompanyBody": "Contacta con el administrador para obtener acceso.",

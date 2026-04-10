@@ -2,7 +2,7 @@
 import type { ReactNode } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
-import { DOCS_URL, FONT, PHASE_COLORS, SUPER_ADMIN_EMAIL } from "./constants";
+import { FONT, PHASE_COLORS, SUPER_ADMIN_EMAIL } from "./constants";
 import { ThemeContext, ThemeModeContext, resolveTheme, usePrefersDark } from "./hooks/useTheme";
 import type { ThemeMode } from "./hooks/useTheme";
 import {
@@ -141,8 +141,6 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [activeMobileColIdx, setActiveMobileColIdx] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const docsUrl = DOCS_URL;
 
   useEffect(() => {
     const update = () => setIsMobile(window.innerWidth < 768);
@@ -643,11 +641,10 @@ export default function App() {
   ] : [];
 
   const topMenuActions = [
-    ...(featureFlags.improvements ? [{ id: "improvements", label: t("menu.improvements"), onClick: () => setPage("improvements") }] : []),
+    { id: "profile", label: t("menu.openProfile"), onClick: () => setProfileOpen(true) },
     { id: "settings", label: t("menu.settings"), onClick: () => setPage("settings") },
     ...(featureFlags.company_admin_console && companyRole === "company_admin" ? [{ id: "companyAdmin", label: t("menu.companyAdmin"), onClick: () => setPage("company-admin") }] : []),
     ...(isSuperAdmin ? [{ id: "admin", label: t("menu.admin"), onClick: () => setPage("admin") }] : []),
-    { id: "docs", label: t("menu.docs"), onClick: () => window.open(docsUrl, "_blank", "noopener,noreferrer") },
     { id: "logout", label: t("menu.logout"), onClick: handleLogout },
   ];
 
@@ -894,20 +891,26 @@ export default function App() {
     );
   }
 
+  let headerTitle = board?.title || t("app.brand");
+  let headerSubtitle = activeProject?.name || "";
+  let mainContent: ReactNode;
+
   if (page === "component-settings-list") {
-    return withTheme(<ComponentSettingsListPage basePath={basePath} />);
-  }
-
-  if (page === "component-settings" && componentId) {
-    return withTheme(<ComponentSettingsPage basePath={basePath} componentId={componentId} />);
-  }
-
-  if (page === "admin" && isSuperAdmin && currentUser) {
-    return withTheme(<SuperAdminPage currentUser={currentUser} onBack={() => setPage("board")} />);
-  }
-
-  if (page === "company-admin" && currentUser && company && featureFlags.company_admin_console && companyRole === "company_admin") {
-    return withTheme(
+    headerTitle = "Configuracion de componentes";
+    headerSubtitle = "";
+    mainContent = <ComponentSettingsListPage basePath={basePath} />;
+  } else if (page === "component-settings" && componentId) {
+    headerTitle = "Configuracion de componentes";
+    headerSubtitle = componentId;
+    mainContent = <ComponentSettingsPage basePath={basePath} componentId={componentId} />;
+  } else if (page === "admin" && isSuperAdmin && currentUser) {
+    headerTitle = t("menu.admin");
+    headerSubtitle = "";
+    mainContent = <SuperAdminPage currentUser={currentUser} onBack={() => setPage("board")} />;
+  } else if (page === "company-admin" && currentUser && company && featureFlags.company_admin_console && companyRole === "company_admin") {
+    headerTitle = t("menu.companyAdmin");
+    headerSubtitle = company.name;
+    mainContent = (
       <CompanyAdminPage
         currentUser={currentUser}
         company={company}
@@ -916,10 +919,10 @@ export default function App() {
         onBack={() => setPage("board")}
       />
     );
-  }
-
-  if (!company) {
-    return withTheme(
+  } else if (!company) {
+    headerTitle = t("app.noCompanyTitle");
+    headerSubtitle = "";
+    mainContent = (
       <div style={{ minHeight: "100vh", background: T.bgSoft, padding: 24, fontFamily: FONT }}>
         {isSuperAdmin && (
           <div style={{ marginBottom: 24 }}>
@@ -933,16 +936,16 @@ export default function App() {
         )}
         <p style={{ color: T.text, fontWeight: 700 }}>{t("app.noCompanyTitle")}</p>
         <p style={{ color: T.textSoft, fontSize: 13 }}>{t("app.noCompanyBody")}</p>
-      </div>,
+      </div>
     );
-  }
-
-  if (page === "improvements" && currentUser && company && featureFlags.improvements) {
-    return withTheme(<ImprovementsPage currentUser={currentUser} companyId={company.id} onBack={() => setPage("board")} />);
-  }
-
-  if (page === "settings" && board && currentUser && company) {
-    return withTheme(
+  } else if (page === "improvements" && currentUser && company && featureFlags.improvements) {
+    headerTitle = t("menu.improvements");
+    headerSubtitle = company.name;
+    mainContent = <ImprovementsPage currentUser={currentUser} companyId={company.id} onBack={() => setPage("board")} />;
+  } else if (page === "settings" && board && currentUser && company) {
+    headerTitle = t("menu.settings");
+    headerSubtitle = company.name;
+    mainContent = (
       <div style={{ position: "relative" }}>
         <SettingsPage
           board={board}
@@ -978,12 +981,12 @@ export default function App() {
             setCompanyBackups(refreshed);
           }}
         />
-      </div>,
+      </div>
     );
-  }
-
-  if (!board || !currentUser || !activeProject) {
-    return withTheme(
+  } else if (!board || !currentUser || !activeProject) {
+    headerTitle = t("app.noBoards");
+    headerSubtitle = "";
+    mainContent = (
       <div style={{ minHeight: "100vh", background: T.bgSoft, padding: 24, fontFamily: FONT }}>
         <p style={{ color: T.text, fontWeight: 700 }}>{t("app.noBoards")}</p>
         {!activeProject && (
@@ -991,7 +994,165 @@ export default function App() {
             {t("app.noProjectsBody")}
           </p>
         )}
-      </div>,
+      </div>
+    );
+  } else {
+    mainContent = (
+      <>
+        {page === "board" && secondaryActions.length > 0 && (
+          <SecondaryBar actions={secondaryActions} order={secondaryOrder} onEdit={() => setSecondaryEditorOpen(true)} />
+        )}
+
+        {isMobile && (
+          <div style={{ display: "flex", padding: "0 12px", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
+            {columns.map((col, i) => {
+              const colColor = PHASE_COLORS[col.phase] || "#888";
+              const active = i === activeMobileColIdx;
+              const cnt = cards.filter(c => c.col_id === col.id && cardVisible(c)).length;
+              return (
+                <button key={col.id} onClick={() => setActiveMobileColIdx(i)}
+                  style={{ flexShrink: 0, marginBottom: 10, fontSize: 11, fontWeight: 700, padding: "7px 12px", borderRadius: 10, border: `1px solid ${active ? colColor : T.border}`, backgroundColor: active ? `${colColor}18` : "transparent", color: active ? colColor : T.textSoft, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
+                  {col.name}
+                  <span style={{ fontSize: 10, background: active ? colColor : T.bgElevated, color: active ? "#fff" : T.textSoft, borderRadius: 999, padding: "1px 6px" }}>{cnt}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Sub-header: metrics · filters */}
+        <div style={{ flexShrink: 0 }}>
+          {featureFlags.metrics && showMetrics && (
+            <div style={{ padding: "8px 16px", display: "flex", gap: 10, overflowX: "auto", scrollbarWidth: "none" }}>
+              {metricDefs.map(m => (
+                <div key={m.label} style={{ backgroundColor: T.bgElevated, borderRadius: 14, border: `1px solid ${T.border}`, padding: "10px 14px", minWidth: isMobile ? 120 : 150, flexShrink: 0, boxShadow: T.shadowSm }}>
+                  <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 600, color: T.textSoft }}>{m.label}</p>
+                  <p style={{ margin: "0 0 2px", fontSize: isMobile ? 16 : 20, fontWeight: 800, color: m.color }}>{m.value}</p>
+                  <p style={{ margin: 0, fontSize: 9, color: T.textSoft }}>{m.hint}</p>
+                </div>
+              ))}
+              {(featureFlags.metrics_burnup || featureFlags.metrics_burndown) && (
+                <div style={{ backgroundColor: T.bgElevated, borderRadius: 14, border: `1px solid ${T.border}`, padding: "10px 14px", minWidth: isMobile ? 180 : 220, flexShrink: 0, boxShadow: T.shadowSm }}>
+                  <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: T.textSoft }}>{t("board.advancedMetrics")}</p>
+                  <svg width={isMobile ? 160 : 200} height={60} style={{ display: "block" }}>
+                    {featureFlags.metrics_burnup && (
+                      <path d={seriesPath(burnSeries.createdSeries, isMobile ? 160 : 200, 50)} stroke={T.warning} strokeWidth="2" fill="none" />
+                    )}
+                    {featureFlags.metrics_burndown && (
+                      <path d={seriesPath(burnSeries.remainingSeries, isMobile ? 160 : 200, 50)} stroke={T.success} strokeWidth="2" fill="none" />
+                    )}
+                  </svg>
+                  <div style={{ display: "flex", gap: 8, fontSize: 9, color: T.textSoft }}>
+                    {featureFlags.metrics_burnup && <span>{t("metrics.burnup")}</span>}
+                    {featureFlags.metrics_burndown && <span>{t("metrics.burndown")}</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {featureFlags.filters && showFilters && (
+            <div style={{ margin: "0 16px 8px", padding: "8px 12px", display: "flex", gap: 6, alignItems: "center", border: `1px solid ${T.border}`, borderRadius: 14, backgroundColor: T.bgSidebar, flexWrap: "wrap", backdropFilter: "blur(14px)" }}>
+              {!isMobile && (["pre", "work", "post"] as const).map(phase => (
+                <span key={phase} style={{ fontSize: 10, fontWeight: 700, color: PHASE_COLORS[phase], padding: "3px 8px", borderRadius: 999, background: `${PHASE_COLORS[phase]}14`, border: `1px solid ${PHASE_COLORS[phase]}40` }}>
+                  {phase === "pre" ? t("filters.pre") : phase === "work" ? t("filters.work") : t("filters.post")}
+                </span>
+              ))}
+              {!isMobile && <div style={{ width: 1, height: 14, background: T.border }} />}
+              {filters.map(f => {
+                const on = activeFilters.includes(f.id);
+                return (
+                  <button key={f.id} onClick={() => setActiveFilters(fs => on ? fs.filter(x => x !== f.id) : [...fs, f.id])}
+                    style={{ fontSize: 11, fontWeight: 700, padding: "5px 10px", borderRadius: 999, border: `1px solid ${on ? T.accent : T.border}`, backgroundColor: on ? T.accentSoft : "transparent", color: on ? T.accent : T.textSoft, cursor: "pointer" }}>
+                    {f.label}
+                  </button>
+                );
+              })}
+              {activeFilters.length > 0 && (
+                <button onClick={() => setActiveFilters([])}
+                  style={{ fontSize: 11, fontWeight: 700, padding: "5px 8px", borderRadius: 999, border: "none", backgroundColor: "transparent", color: T.danger, cursor: "pointer" }}>
+                  ×
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Board area */}
+        {isMobile ? (
+          (() => {
+            const col = columns[activeMobileColIdx];
+            if (!col) return null;
+            const colColor = PHASE_COLORS[col.phase] || "#888";
+            const colCards = cards.filter(c => c.col_id === col.id && cardVisible(c));
+            const wipOver = col.is_wip && col.wip_limit > 0 && colCards.length > col.wip_limit;
+            return (
+              <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}
+                   onDragOver={onDragOver} onDrop={e => onDrop(e, col.id)}>
+                <div style={{ padding: "10px 16px 6px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: colColor, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, fontWeight: 800, color: colColor, flex: 1, letterSpacing: 0.8 }}>{col.name.toUpperCase()}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: wipOver ? T.danger : T.textSoft, background: T.bgElevated, borderRadius: 999, padding: "3px 10px", border: `1px solid ${T.border}` }}>
+                    {colCards.length}{col.wip_limit > 0 ? `/${col.wip_limit}` : ""}
+                  </span>
+                  {wipOver && <span style={{ fontSize: 9, fontWeight: 800, color: T.danger, background: T.dangerSoft, borderRadius: 999, padding: "2px 7px" }}>{t("board.wipAlert")}</span>}
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", padding: "6px 12px 16px", scrollbarWidth: "thin" }}>
+                  {colCards.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "48px 0", color: T.textSoft, fontSize: 13, fontStyle: "italic", border: `1px dashed ${T.borderStrong}`, borderRadius: 18, background: T.bgElevated, margin: "4px 0" }}>
+                      {t("board.noCardsColumn")}
+                    </div>
+                  )}
+                  {colCards.map(card => (
+                    <KCard key={card.id} card={card} columns={columns} states={states} users={users} allCards={cards} featureFlags={featureFlags} onOpen={openCard} onDragStart={onDragStart} />
+                  ))}
+                </div>
+              </div>
+            );
+          })()
+        ) : (
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", gap: 10, padding: "12px 16px 14px", alignItems: "stretch" }}>
+            {columns.map(col => {
+              const colColor = PHASE_COLORS[col.phase] || "#888";
+              const colCards = cards.filter(c => c.col_id === col.id && cardVisible(c));
+              const wipOver = col.is_wip && col.wip_limit > 0 && colCards.length > col.wip_limit;
+              const wipPct = col.wip_limit > 0 ? Math.min(100, (colCards.length / col.wip_limit) * 100) : 30;
+              return (
+                <div key={col.id} onDragOver={onDragOver} onDrop={e => onDrop(e, col.id)}
+                  style={{ flex: 1, minWidth: 200, backgroundColor: T.bgColumn, borderRadius: 18, border: `1px solid ${wipOver ? T.danger : T.border}`, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: T.shadowSm }}>
+                  <div style={{ padding: "12px 14px 10px", borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: colColor, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, fontWeight: 800, color: colColor, letterSpacing: 0.6, flex: 1 }}>{col.name.toUpperCase()}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: wipOver ? T.danger : T.textSoft, background: T.bgElevated, borderRadius: 999, padding: "3px 9px", border: `1px solid ${T.border}` }}>
+                        {colCards.length}{col.wip_limit > 0 ? `/${col.wip_limit}` : ""}
+                      </span>
+                    </div>
+                    <div style={{ marginTop: 8, height: 3, borderRadius: 999, background: `${colColor}20`, overflow: "hidden" }}>
+                      <div style={{ width: `${wipPct}%`, height: "100%", borderRadius: 999, background: colColor, transition: "width .4s ease" }} />
+                    </div>
+                    {col.is_wip && (
+                      <span style={{ fontSize: 9, fontWeight: 800, color: wipOver ? T.danger : T.warning, background: wipOver ? T.dangerSoft : T.warningSoft, borderRadius: 999, padding: "2px 7px", marginTop: 6, display: "inline-block" }}>
+                        WIP{wipOver ? ` — ${t("board.wipLimit")}` : ""}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ padding: "8px", overflowY: "auto", flex: 1, scrollbarWidth: "thin" }}>
+                    {colCards.length === 0 && (
+                      <div style={{ textAlign: "center", padding: "24px 0", color: T.textSoft, fontSize: 12, fontStyle: "italic", border: `1px dashed ${T.borderStrong}`, borderRadius: 14, background: T.bgElevated }}>
+                        {t("board.noCards")}
+                      </div>
+                    )}
+                    {colCards.map(card => (
+                      <KCard key={card.id} card={card} columns={columns} states={states} users={users} allCards={cards} featureFlags={featureFlags} onOpen={openCard} onDragStart={onDragStart} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {page === "board" && <PhaseLegend isMobile={isMobile} />}
+      </>
     );
   }
 
@@ -1043,6 +1204,8 @@ export default function App() {
           user={currentUser}
           isOpen={profileOpen}
           isMobile={isMobile}
+          themeMode={themeMode}
+          onThemeChange={setThemeMode}
           onClose={() => setProfileOpen(false)}
           onSaved={updated => {
             setCurrentUser(updated);
@@ -1052,10 +1215,11 @@ export default function App() {
         />
       )}
 
-      {/* Mobile slide-out menu */}
+
+      {/* Mobile sidebar drawer */}
       {isMobile && mobileMenuOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.overlay }} onClick={() => setMobileMenuOpen(false)}>
-          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 280, background: T.bg, borderLeft: `1px solid ${T.border}`, display: "flex", flexDirection: "column" }}
+          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 280, background: T.bgSidebar, borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column" }}
                onClick={e => e.stopPropagation()}>
             <div style={{ padding: "20px 20px 14px", borderBottom: `1px solid ${T.border}` }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 4 }}>{t("app.brand")}</div>
@@ -1067,7 +1231,7 @@ export default function App() {
                 {getUserFullName(currentUser) || currentUser.name}
               </button>
             </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
               {companyLinks.length > 1 && (
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>{t("menu.company").toUpperCase()}</div>
@@ -1096,24 +1260,13 @@ export default function App() {
                 </div>
               )}
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>{t("menu.theme").toUpperCase()}</div>
-                <select value={themeMode} onChange={e => setThemeMode(e.target.value as ThemeMode)}
+                <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 5, letterSpacing: 0.5 }}>{t("menu.board").toUpperCase()}</div>
+                <select value={activeBoardId || ""} onChange={e => setActiveBoardId(e.target.value)}
                   style={{ width: "100%", fontSize: 13, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
-                  <option value="system">{t("theme.system")}</option>
-                  <option value="light">{t("theme.light")}</option>
-                  <option value="dark">{t("theme.dark")}</option>
+                  {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
                 </select>
               </div>
               <div style={{ height: 1, background: T.border }} />
-              {topMenuActions.map(action => (
-                <button
-                  key={action.id}
-                  onClick={() => { action.onClick(); setMobileMenuOpen(false); }}
-                  style={{ textAlign: "left", fontSize: 13, fontWeight: 600, padding: "10px 12px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}
-                >
-                  {action.label}
-                </button>
-              ))}
               <button onClick={() => { setShowNewKanban(true); setMobileMenuOpen(false); }}
                 style={{ textAlign: "left", fontSize: 13, fontWeight: 600, padding: "10px 12px", borderRadius: 10, border: `1px dashed ${T.borderStrong}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}>
                 {t("menu.newBoard")}
@@ -1123,258 +1276,95 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
-      {isMobile ? (
-        <div style={{ flexShrink: 0, backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, backdropFilter: "blur(18px)" }}>
-          <div style={{ display: "flex", alignItems: "center", padding: "12px 16px 8px", gap: 10 }}>
-            <span style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: -0.5, flex: 1 }}>{t("app.brand")}</span>
-            <button
-              onClick={() => setProfileOpen(true)}
-              style={{ fontSize: 11, color: T.textSoft, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", border: "none", background: "transparent", cursor: "pointer" }}
-              title={getUserFullName(currentUser) || currentUser.name}
-            >
-              {getUserFullName(currentUser) || currentUser.name}
-            </button>
-            <button onClick={() => setMobileMenuOpen(true)}
-              style={{ fontSize: 16, lineHeight: 1, padding: "7px 11px", borderRadius: 10, border: `1px solid ${T.border}`, backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
-              ≡
-            </button>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", padding: "0 16px 10px", gap: 8 }}>
+      {!isMobile && (
+        <aside style={{ width: 230, flexShrink: 0, background: T.bgSidebar, borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column", padding: "16px 14px", gap: 14 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>{t("app.brand")}</div>
+          {companyLinks.length > 1 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 6, letterSpacing: 0.5 }}>{t("menu.company").toUpperCase()}</div>
+              <select value={activeCompanyId || ""} onChange={e => { const v = e.target.value; setActiveCompanyId(v); setActiveWorkspaceId(null); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
+                style={{ width: "100%", fontSize: 12, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 10px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
+                {companyLinks.map(c => <option key={c.company.id} value={c.company.id}>{c.company.name}</option>)}
+              </select>
+            </div>
+          )}
+          {featureFlags.workspaces && workspaces.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 6, letterSpacing: 0.5 }}>{t("menu.workspace").toUpperCase()}</div>
+              <select value={activeWorkspaceId || ""} onChange={e => { const v = e.target.value; setActiveWorkspaceId(v); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
+                style={{ width: "100%", fontSize: 12, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 10px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
+                {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </div>
+          )}
+          {projects.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 6, letterSpacing: 0.5 }}>{t("menu.project").toUpperCase()}</div>
+              <select value={activeProjectId || ""} onChange={e => { const v = e.target.value; setActiveProjectId(v); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
+                style={{ width: "100%", fontSize: 12, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 10px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, marginBottom: 6, letterSpacing: 0.5 }}>{t("menu.board").toUpperCase()}</div>
             <select value={activeBoardId || ""} onChange={e => setActiveBoardId(e.target.value)}
-              style={{ flex: 1, fontSize: 13, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", backgroundColor: T.bgElevated, color: T.text, outline: "none" }}>
+              style={{ width: "100%", fontSize: 12, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 10px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
               {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
             </select>
           </div>
-          {/* Column tabs */}
-          <div style={{ display: "flex", padding: "0 12px", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
-            {columns.map((col, i) => {
-              const colColor = PHASE_COLORS[col.phase] || "#888";
-              const active = i === activeMobileColIdx;
-              const cnt = cards.filter(c => c.col_id === col.id && cardVisible(c)).length;
-              return (
-                <button key={col.id} onClick={() => setActiveMobileColIdx(i)}
-                  style={{ flexShrink: 0, marginBottom: 10, fontSize: 11, fontWeight: 700, padding: "7px 12px", borderRadius: 10, border: `1px solid ${active ? colColor : T.border}`, backgroundColor: active ? `${colColor}18` : "transparent", color: active ? colColor : T.textSoft, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
-                  {col.name}
-                  <span style={{ fontSize: 10, background: active ? colColor : T.bgElevated, color: active ? "#fff" : T.textSoft, borderRadius: 999, padding: "1px 6px" }}>{cnt}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div style={{ flexShrink: 0, padding: "10px 16px", backgroundColor: T.bgSidebar, borderBottom: `1px solid ${T.border}`, backdropFilter: "blur(18px)", boxShadow: T.shadowSm }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 16, fontWeight: 800, color: T.text, letterSpacing: -0.5, marginRight: 4 }}>{t("app.brand")}</span>
-            {companyLinks.length > 1 && (
-              <div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: T.textSoft, marginBottom: 4, letterSpacing: 0.6 }}>{t("menu.company").toUpperCase()}</div>
-                <select value={activeCompanyId || ""} onChange={e => { const v = e.target.value; setActiveCompanyId(v); setActiveWorkspaceId(null); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
-                  style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
-                  {companyLinks.map(c => <option key={c.company.id} value={c.company.id}>{c.company.name}</option>)}
-                </select>
-              </div>
-            )}
-            {featureFlags.workspaces && workspaces.length > 0 && (
-              <div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: T.textSoft, marginBottom: 4, letterSpacing: 0.6 }}>{t("menu.workspace").toUpperCase()}</div>
-                <select value={activeWorkspaceId || ""} onChange={e => { const v = e.target.value; setActiveWorkspaceId(v); setActiveProjectId(null); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
-                  style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
-                  {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </div>
-            )}
-            {projects.length > 0 && (
-              <div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: T.textSoft, marginBottom: 4, letterSpacing: 0.6 }}>{t("menu.project").toUpperCase()}</div>
-                <select value={activeProjectId || ""} onChange={e => { const v = e.target.value; setActiveProjectId(v); setActiveBoardId(null); setBoards([]); setColumns([]); setStates([]); setCards([]); }}
-                  style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-            )}
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: T.textSoft, marginBottom: 4, letterSpacing: 0.6 }}>{t("menu.board").toUpperCase()}</div>
-              <select value={activeBoardId || ""} onChange={e => setActiveBoardId(e.target.value)}
-                style={{ fontSize: 11, fontWeight: 700, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, outline: "none", cursor: "pointer" }}>
-                {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: 1 }} />
-            <button
-              onClick={() => setProfileOpen(true)}
-              style={{ fontSize: 11, color: T.textSoft, border: "none", background: "transparent", cursor: "pointer" }}
-              title={getUserFullName(currentUser) || currentUser.name}
-            >
-              {getUserFullName(currentUser) || currentUser.name}
+        </aside>
+      )}
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <div style={{ height: 56, background: T.bgSidebar, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 12, padding: "0 18px", boxShadow: T.shadowSm }}>
+          {isMobile && (
+            <button onClick={() => setMobileMenuOpen(true)}
+              style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${T.border}`, background: T.bgElevated, color: T.text, cursor: "pointer" }}>
+              ≡
             </button>
-            <select value={themeMode} onChange={e => setThemeMode(e.target.value as ThemeMode)}
-              style={{ fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px", backgroundColor: T.bgElevated, color: T.text, cursor: "pointer" }}>
-              <option value="system">{t("theme.system")}</option>
-              <option value="light">{t("theme.light")}</option>
-              <option value="dark">{t("theme.dark")}</option>
-            </select>
-            <div style={{ position: "relative" }}>
-              <button
-                onClick={() => setTopMenuOpen(v => !v)}
-                style={{ fontSize: 11, fontWeight: 700, padding: "7px 10px", borderRadius: 9, border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSoft, cursor: "pointer" }}
-              >
-                {t("menu.menu")}
-              </button>
-              {topMenuOpen && (
-                <div style={{ position: "absolute", right: 0, top: "110%", minWidth: 180, background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 12, boxShadow: T.shadowMd, padding: 8, zIndex: 50 }}>
-                  {topMenuActions.map(action => (
-                    <button
-                      key={action.id}
-                      onClick={() => { action.onClick(); setTopMenuOpen(false); }}
-                      style={{ width: "100%", textAlign: "left", fontSize: 12, fontWeight: 600, padding: "8px 10px", borderRadius: 8, border: "none", background: "transparent", color: T.text, cursor: "pointer" }}
-                    >
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              )}
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: -0.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{headerTitle}</div>
+            {headerSubtitle && <div style={{ fontSize: 11, color: T.textMuted }}>{headerSubtitle}</div>}
+          </div>
+          {!isMobile && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.bgElevated, border: `1px solid ${T.border}`, borderRadius: 10, padding: "0 10px", height: 36 }}>
+              <span style={{ fontSize: 12, color: T.textMuted }}>⌕</span>
+              <input placeholder={t("menu.searchPlaceholder") || "Buscar..."} style={{ background: "transparent", border: "none", outline: "none", fontSize: 12, color: T.text, width: 180 }} />
             </div>
-          </div>
-        </div>
-      )}
-
-      {page === "board" && secondaryActions.length > 0 && (
-        <SecondaryBar actions={secondaryActions} order={secondaryOrder} onEdit={() => setSecondaryEditorOpen(true)} />
-      )}
-
-      {/* Sub-header: metrics · filters */}
-      <div style={{ flexShrink: 0 }}>
-        {featureFlags.metrics && showMetrics && (
-          <div style={{ padding: "8px 16px", display: "flex", gap: 10, overflowX: "auto", scrollbarWidth: "none" }}>
-            {metricDefs.map(m => (
-              <div key={m.label} style={{ backgroundColor: T.bgElevated, borderRadius: 14, border: `1px solid ${T.border}`, padding: "10px 14px", minWidth: isMobile ? 120 : 150, flexShrink: 0, boxShadow: T.shadowSm }}>
-                <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 600, color: T.textSoft }}>{m.label}</p>
-                <p style={{ margin: "0 0 2px", fontSize: isMobile ? 16 : 20, fontWeight: 800, color: m.color }}>{m.value}</p>
-                <p style={{ margin: 0, fontSize: 9, color: T.textSoft }}>{m.hint}</p>
-              </div>
-            ))}
-            {(featureFlags.metrics_burnup || featureFlags.metrics_burndown) && (
-              <div style={{ backgroundColor: T.bgElevated, borderRadius: 14, border: `1px solid ${T.border}`, padding: "10px 14px", minWidth: isMobile ? 180 : 220, flexShrink: 0, boxShadow: T.shadowSm }}>
-                <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: T.textSoft }}>{t("board.advancedMetrics")}</p>
-                <svg width={isMobile ? 160 : 200} height={60} style={{ display: "block" }}>
-                  {featureFlags.metrics_burnup && (
-                    <path d={seriesPath(burnSeries.createdSeries, isMobile ? 160 : 200, 50)} stroke={T.warning} strokeWidth="2" fill="none" />
-                  )}
-                  {featureFlags.metrics_burndown && (
-                    <path d={seriesPath(burnSeries.remainingSeries, isMobile ? 160 : 200, 50)} stroke={T.success} strokeWidth="2" fill="none" />
-                  )}
-                </svg>
-                <div style={{ display: "flex", gap: 8, fontSize: 9, color: T.textSoft }}>
-                  {featureFlags.metrics_burnup && <span>{t("metrics.burnup")}</span>}
-                  {featureFlags.metrics_burndown && <span>{t("metrics.burndown")}</span>}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        {featureFlags.filters && showFilters && (
-          <div style={{ margin: "0 16px 8px", padding: "8px 12px", display: "flex", gap: 6, alignItems: "center", border: `1px solid ${T.border}`, borderRadius: 14, backgroundColor: T.bgSidebar, flexWrap: "wrap", backdropFilter: "blur(14px)" }}>
-            {!isMobile && (["pre", "work", "post"] as const).map(phase => (
-              <span key={phase} style={{ fontSize: 10, fontWeight: 700, color: PHASE_COLORS[phase], padding: "3px 8px", borderRadius: 999, background: `${PHASE_COLORS[phase]}14`, border: `1px solid ${PHASE_COLORS[phase]}40` }}>
-                {phase === "pre" ? t("filters.pre") : phase === "work" ? t("filters.work") : t("filters.post")}
-              </span>
-            ))}
-            {!isMobile && <div style={{ width: 1, height: 14, background: T.border }} />}
-            {filters.map(f => {
-              const on = activeFilters.includes(f.id);
-              return (
-                <button key={f.id} onClick={() => setActiveFilters(fs => on ? fs.filter(x => x !== f.id) : [...fs, f.id])}
-                  style={{ fontSize: 11, fontWeight: 700, padding: "5px 10px", borderRadius: 999, border: `1px solid ${on ? T.accent : T.border}`, backgroundColor: on ? T.accentSoft : "transparent", color: on ? T.accent : T.textSoft, cursor: "pointer" }}>
-                  {f.label}
-                </button>
-              );
-            })}
-            {activeFilters.length > 0 && (
-              <button onClick={() => setActiveFilters([])}
-                style={{ fontSize: 11, fontWeight: 700, padding: "5px 8px", borderRadius: 999, border: "none", backgroundColor: "transparent", color: T.danger, cursor: "pointer" }}>
-                ×
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Board area */}
-      {isMobile ? (
-        (() => {
-          const col = columns[activeMobileColIdx];
-          if (!col) return null;
-          const colColor = PHASE_COLORS[col.phase] || "#888";
-          const colCards = cards.filter(c => c.col_id === col.id && cardVisible(c));
-          const wipOver = col.is_wip && col.wip_limit > 0 && colCards.length > col.wip_limit;
-          return (
-            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}
-                 onDragOver={onDragOver} onDrop={e => onDrop(e, col.id)}>
-              <div style={{ padding: "10px 16px 6px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: colColor, flexShrink: 0 }} />
-                <span style={{ fontSize: 11, fontWeight: 800, color: colColor, flex: 1, letterSpacing: 0.8 }}>{col.name.toUpperCase()}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: wipOver ? T.danger : T.textSoft, background: T.bgElevated, borderRadius: 999, padding: "3px 10px", border: `1px solid ${T.border}` }}>
-                  {colCards.length}{col.wip_limit > 0 ? `/${col.wip_limit}` : ""}
-                </span>
-                {wipOver && <span style={{ fontSize: 9, fontWeight: 800, color: T.danger, background: T.dangerSoft, borderRadius: 999, padding: "2px 7px" }}>{t("board.wipAlert")}</span>}
-              </div>
-              <div style={{ flex: 1, overflowY: "auto", padding: "6px 12px 16px", scrollbarWidth: "thin" }}>
-                {colCards.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "48px 0", color: T.textSoft, fontSize: 13, fontStyle: "italic", border: `1px dashed ${T.borderStrong}`, borderRadius: 18, background: T.bgElevated, margin: "4px 0" }}>
-                    {t("board.noCardsColumn")}
-                  </div>
-                )}
-                {colCards.map(card => (
-                  <KCard key={card.id} card={card} columns={columns} states={states} users={users} allCards={cards} featureFlags={featureFlags} onOpen={openCard} onDragStart={onDragStart} />
+          )}
+          {featureFlags.improvements && (
+            <button onClick={() => setPage("improvements")}
+              style={{ fontSize: 12, fontWeight: 700, padding: "8px 12px", borderRadius: 9, border: `1px solid ${T.accent}`, background: T.accentSoft, color: T.accent, cursor: "pointer" }}>
+              {t("menu.improvements")}
+            </button>
+          )}
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setTopMenuOpen(v => !v)}
+              style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${T.border}`, background: T.bgElevated, padding: "6px 10px", borderRadius: 10, cursor: "pointer", color: T.textSoft }}>
+              <span style={{ fontSize: 12 }}>{t("menu.menu")}</span>
+            </button>
+            {topMenuOpen && (
+              <div style={{ position: "absolute", right: 0, top: "110%", minWidth: 180, background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 12, boxShadow: T.shadowMd, padding: 8, zIndex: 50 }}>
+                {topMenuActions.map(action => (
+                  <button
+                    key={action.id}
+                    onClick={() => { action.onClick(); setTopMenuOpen(false); }}
+                    style={{ width: "100%", textAlign: "left", fontSize: 12, fontWeight: 600, padding: "8px 10px", borderRadius: 8, border: "none", background: "transparent", color: T.text, cursor: "pointer" }}
+                  >
+                    {action.label}
+                  </button>
                 ))}
               </div>
-            </div>
-          );
-        })()
-      ) : (
-        <div style={{ flex: 1, overflow: "hidden", display: "flex", gap: 10, padding: "12px 16px 14px", alignItems: "stretch" }}>
-          {columns.map(col => {
-            const colColor = PHASE_COLORS[col.phase] || "#888";
-            const colCards = cards.filter(c => c.col_id === col.id && cardVisible(c));
-            const wipOver = col.is_wip && col.wip_limit > 0 && colCards.length > col.wip_limit;
-            const wipPct = col.wip_limit > 0 ? Math.min(100, (colCards.length / col.wip_limit) * 100) : 30;
-            return (
-              <div key={col.id} onDragOver={onDragOver} onDrop={e => onDrop(e, col.id)}
-                style={{ flex: 1, minWidth: 200, backgroundColor: T.bgColumn, borderRadius: 18, border: `1px solid ${wipOver ? T.danger : T.border}`, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: T.shadowSm }}>
-                <div style={{ padding: "12px 14px 10px", borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: colColor, flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, fontWeight: 800, color: colColor, letterSpacing: 0.6, flex: 1 }}>{col.name.toUpperCase()}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: wipOver ? T.danger : T.textSoft, background: T.bgElevated, borderRadius: 999, padding: "3px 9px", border: `1px solid ${T.border}` }}>
-                      {colCards.length}{col.wip_limit > 0 ? `/${col.wip_limit}` : ""}
-                    </span>
-                  </div>
-                  <div style={{ marginTop: 8, height: 3, borderRadius: 999, background: `${colColor}20`, overflow: "hidden" }}>
-                    <div style={{ width: `${wipPct}%`, height: "100%", borderRadius: 999, background: colColor, transition: "width .4s ease" }} />
-                  </div>
-                  {col.is_wip && (
-                    <span style={{ fontSize: 9, fontWeight: 800, color: wipOver ? T.danger : T.warning, background: wipOver ? T.dangerSoft : T.warningSoft, borderRadius: 999, padding: "2px 7px", marginTop: 6, display: "inline-block" }}>
-                      WIP{wipOver ? ` — ${t("board.wipLimit")}` : ""}
-                    </span>
-                  )}
-                </div>
-                <div style={{ padding: "8px", overflowY: "auto", flex: 1, scrollbarWidth: "thin" }}>
-                  {colCards.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "24px 0", color: T.textSoft, fontSize: 12, fontStyle: "italic", border: `1px dashed ${T.borderStrong}`, borderRadius: 14, background: T.bgElevated }}>
-                      {t("board.noCards")}
-                    </div>
-                  )}
-                  {colCards.map(card => (
-                    <KCard key={card.id} card={card} columns={columns} states={states} users={users} allCards={cards} featureFlags={featureFlags} onOpen={openCard} onDragStart={onDragStart} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+            )}
+          </div>
         </div>
-      )}
-      {page === "board" && <PhaseLegend isMobile={isMobile} />}
+
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          {mainContent}
+        </div>
+      </div>
     </div>,
   );
 }

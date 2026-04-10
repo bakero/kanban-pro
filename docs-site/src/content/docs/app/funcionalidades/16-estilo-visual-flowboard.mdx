@@ -1,0 +1,54 @@
+---
+title: Nuevo estilo visual (FlowBoard)
+description: Sistema visual elegante, tecnologico y consistente.
+---
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
+## Objetivo
+Unificar toda la app con un sistema visual elegante, tecnologico y coherente.
+
+## Funcionamiento
+- Se centralizan tokens de color, tipografia y sombras.
+- El layout base usa sidebar fijo + topbar en todas las pantallas.
+- El tema claro/oscuro se controla desde el perfil del usuario.
+
+## Reglas de negocio
+- Cumplir WCAG AA en contraste.
+- Soporte completo de teclado.
+- Mantener un unico modo de densidad (balanceado).
+
+## Requisitos funcionales
+- Inter como tipografia principal.
+- Acento principal #1A6EFF.
+- Tokens centralizados en un archivo dedicado.
+- Sidebar fijo + topbar en todas las pantallas.
+
+## Requisitos no funcionales
+- Accesibilidad WCAG AA.
+- Transiciones ligeras y sin animaciones pesadas.
+
+## Implementacion tecnica
+- Tokens en `src/theme/tokens.ts`.
+- Tema resuelto desde `src/hooks/useTheme.ts`.
+- App principal y consola consumen el tema desde el mismo contexto.
+- Tipografia global configurada en `src/index.css`.
+
+## Escenarios de prueba
+1. Verificar Inter en app principal y consola.
+2. Confirmar acento #1A6EFF en botones principales.
+3. Comprobar sidebar + topbar en vistas principales.
+4. Cambiar tema desde el perfil y validar claro/oscuro.
+5. Navegar con teclado entre elementos interactivos.
+
+## Ultimas pruebas de integracion (manual)
+- Entorno: local
+- Resultado: OK (verificaciones visuales y navegacion por teclado).
+
+## Ultima ejecucion automatizada
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />
+
+## Spec
+- `.specify/specs/003-nuevo-estilo-visual/spec.md`

@@ -1,9 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
 :root {
-  font-family: "Inter Tight", sans-serif;
-  color: #1a1c1e;
-  background: #f4f6f8;
+  font-family: "Inter", sans-serif;
+  color: #0f1117;
+  background: #f0f2f7;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -22,10 +22,7 @@ body,
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at top left, rgba(62, 123, 250, 0.1), transparent 26%),
-    radial-gradient(circle at top right, rgba(39, 163, 118, 0.08), transparent 22%),
-    #f4f6f8;
+  background: #f0f2f7;
 }
 
 button,
@@ -66,5 +63,5 @@ select:focus,
 textarea:focus,
 button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(62, 123, 250, 0.14);
+  box-shadow: 0 0 0 3px rgba(26, 110, 255, 0.18);
 }
