@@ -1,66 +1,30 @@
 name: CI
 
 on:
-  push:
-    branches: [ master ]
   pull_request:
-
-permissions:
-  contents: write
+    branches: [develop, preview, master]
+  push:
+    branches: [preview, master]
 
 jobs:
-  app:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
           cache: npm
-      - run: npm install
-      - run: npm run check
-      - run: npm run build
-
-  docs:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: docs-site
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm install
-      - run: npm run build
-
-  regression:
-    if: github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    env:
-      E2E_BASE_URL: https://kanban-incrzyulw-kanban-pro.vercel.app/
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm install
-      - run: npx playwright install --with-deps
-      - run: npm run test:regression --if-present
-      - name: Update last run link
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck + Lint
+        run: npm run check
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+      - name: Run E2E (dev server)
         env:
-          LAST_RUN_KEY: regression_master
-        run: node scripts/update-last-runs.mjs
-      - name: Commit last run link
+          E2E_BASE_URL: http://127.0.0.1:5173
         run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            git config user.name "github-actions"
-            git config user.email "github-actions@github.com"
-            git add docs-site/src/content/docs/qa/last-runs.json
-            git commit -m "chore(docs): update last run link"
-            git push
-          else
-            echo "No last run changes"
-          fi
+          npm run dev -- --host 127.0.0.1 --port 5173 &
+          npx wait-on http://127.0.0.1:5173
+          npm run test:e2e
