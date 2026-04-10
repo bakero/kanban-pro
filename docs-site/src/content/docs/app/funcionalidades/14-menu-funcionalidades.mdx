@@ -1,0 +1,46 @@
+---
+title: Menu de funcionalidades
+description: Menu global con perfil, configuracion, consola y cierre de sesion.
+---
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
+## Objetivo
+Centralizar el acceso a opciones clave desde un unico punto visible.
+
+## Funcionamiento
+- Boton con avatar en la esquina superior izquierda de la topbar.
+- Dropdown sobre el resto de la interfaz con opciones del menu.
+- Cierre automatico al seleccionar opcion o hacer click fuera.
+
+## Reglas de negocio
+- Consola Empresa solo para el responsable (companies.owner_user_id).
+- Logout cierra sesion y redirige a la pantalla de login.
+
+## Requisitos funcionales
+- Perfil abre `/perfil`.
+- Configuracion abre la pantalla de ajustes.
+- Consola Empresa solo si el usuario es responsable.
+- Cerrar sesion invalida la sesion y redirige.
+
+## Requisitos no funcionales
+- Menu navegable con teclado.
+- Dropdown siempre en primer plano.
+
+## Escenarios de prueba
+1. Usuario responsable ve Consola Empresa.
+2. Usuario no responsable no ve Consola Empresa.
+3. Orden y cierre del menu (click fuera, Esc).
+4. Acciones de menu correctas (perfil, configuracion, logout).
+
+## Ultimas pruebas de integracion (manual)
+- Entorno: local
+- Resultado: OK
+
+## Ultima ejecucion automatizada
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />
+
+## Spec
+- `.specify/specs/001-menu-funcionalidades/spec.md`

@@ -274,6 +274,19 @@ Usa este bloque cada vez que se implemente una funcionalidad nueva. La idea es d
 - Archivos principales: `src/components/legal/LegalPage.tsx`, `src/components/legal/LegalFooter.tsx`, `src/router/AppRouter.tsx`.
 - Notas tecnicas: el contenido definitivo se completara por la empresa responsable.
 
+### Menu de funcionalidades en topbar
+- Estado: `implementada`
+- Fecha: 2026-04-10
+- Objetivo: centralizar el acceso a perfil, configuracion, consola y cierre de sesion desde un unico punto visible.
+- Pantalla o contexto: topbar de la app principal.
+- Tipo: `UI` | `logica`
+- Descripcion funcional: la topbar muestra un boton de avatar en la esquina superior izquierda que abre un dropdown con opciones clave de la app.
+- Funcionamiento: el dropdown se abre con click o teclado, se cierra al hacer click fuera o seleccionar opcion y navega a `/perfil`, configuracion, consola empresa (si aplica) o logout.
+- Reglas de negocio: la Consola Empresa solo se muestra si `companies.owner_user_id` coincide con el usuario conectado.
+- Impacto en usuario: reduce el espacio ocupado y mantiene el menu siempre visible y accesible.
+- Archivos principales: `src/App.tsx`, `src/components/ProfilePage.tsx`, `src/router/AppRouter.tsx`, `docs-site/src/content/docs/app/funcionalidades/14-menu-funcionalidades.mdx`.
+- Notas tecnicas: el menu implementa soporte de teclado y z-index alto para mostrarse sobre todo el contenido.
+
 ## Entradas futuras
 
 ### Documentacion interactiva de funcionalidades y pruebas

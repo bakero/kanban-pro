@@ -48,7 +48,9 @@ import { CompanyAdminPage } from "./admin/CompanyAdminPage";
 import { PhaseLegend } from "./components/layout/PhaseLegend";
 import { SecondaryBar } from "./components/layout/SecondaryBar";
 import { SecondaryBarEditor } from "./components/layout/SecondaryBarEditor";
+import { ProfilePage } from "./components/ProfilePage";
 import { UserProfilePanel } from "./components/UserProfilePanel";
+import { Avatar } from "./components/ui/Avatar";
 import type {
   Board,
   BoardColumn,
@@ -66,7 +68,7 @@ import type {
   Workspace,
 } from "./types";
 import { LangContext, translate, type Lang, type TranslationKey } from "./i18n";
-type AppPage = "board" | "settings" | "improvements" | "admin" | "company-admin" | "component-settings-list" | "component-settings";
+type AppPage = "board" | "settings" | "improvements" | "admin" | "company-admin" | "component-settings-list" | "component-settings" | "profile";
 
 export default function App() {
   const prefersDark = usePrefersDark();
@@ -136,8 +138,13 @@ export default function App() {
   const [secondaryOrder, setSecondaryOrder] = useState<string[]>([]);
   const [secondaryEditorOpen, setSecondaryEditorOpen] = useState(false);
   const [topMenuOpen, setTopMenuOpen] = useState(false);
+  const [topMenuIndex, setTopMenuIndex] = useState(0);
+  const [topMenuHover, setTopMenuHover] = useState<string | null>(null);
 
   const dragCardId = useRef<string | null>(null);
+  const topMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const topMenuListRef = useRef<HTMLDivElement | null>(null);
+  const topMenuItemRefs = useRef<HTMLButtonElement[]>([]);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [activeMobileColIdx, setActiveMobileColIdx] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -148,7 +155,27 @@ export default function App() {
     return () => window.removeEventListener("resize", update);
   }, []);
 
+  useEffect(() => {
+    if (!topMenuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (topMenuListRef.current?.contains(target)) return;
+      if (topMenuButtonRef.current?.contains(target)) return;
+      setTopMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [topMenuOpen]);
+
   useEffect(() => { setActiveMobileColIdx(0); }, [activeBoardId]);
+
+  useEffect(() => {
+    if (!topMenuOpen) return;
+    setTopMenuIndex(0);
+    requestAnimationFrame(() => {
+      topMenuItemRefs.current[0]?.focus();
+    });
+  }, [topMenuOpen, topMenuActions.length]);
 
   const userThemeKey = currentUser?.email ? `kanban-pro:theme:${currentUser.email.toLowerCase()}` : null;
   const T = resolveTheme(themeMode, prefersDark);
@@ -187,11 +214,19 @@ export default function App() {
 
   useEffect(() => {
     const isComponentRoute = location.pathname.includes("/config/components");
+    const isProfileRoute = location.pathname.endsWith("/perfil") || location.pathname.endsWith("/perfil/");
     if (isComponentRoute) {
       setPage(componentId ? "component-settings" : "component-settings-list");
       return;
     }
+    if (isProfileRoute) {
+      setPage("profile");
+      return;
+    }
     if (page === "component-settings" || page === "component-settings-list") {
+      setPage("board");
+    }
+    if (page === "profile" && !isProfileRoute) {
       setPage("board");
     }
   }, [location.pathname, componentId, page]);
@@ -550,8 +585,10 @@ export default function App() {
   const boardUrl = hasHierarchy
     ? `${basePath}/${activeCompanyId}${activeWorkspaceId ? `/${activeWorkspaceId}` : ""}/${activeProjectId}/${activeBoardId}`
     : (boardUrlId ? `${basePath}/board/${boardUrlId}` : `${basePath}/`);
+  const profileUrl = basePath ? `${basePath}/perfil` : "/perfil";
   const activeProject = projects.find(p => p.id === activeProjectId) || null;
   const myProjectRole = projectMembers.find(m => m.user_id === currentUser?.id)?.role || "member";
+  const isCompanyOwner = !!(company && currentUser && company.owner_id === currentUser.id);
   const discardStateIds = new Set(states.filter(s => s.is_discard).map(s => s.id));
   const wipCols = columns.filter(c => c.is_wip);
   const doneColIds = columns.filter(c => c.phase === "post").map(c => c.id);
@@ -641,9 +678,9 @@ export default function App() {
   ] : [];
 
   const topMenuActions = [
-    { id: "profile", label: t("menu.openProfile"), onClick: () => setProfileOpen(true) },
+    { id: "profile", label: t("menu.openProfile"), onClick: () => navigate(profileUrl) },
     { id: "settings", label: t("menu.settings"), onClick: () => setPage("settings") },
-    ...(featureFlags.company_admin_console && companyRole === "company_admin" ? [{ id: "companyAdmin", label: t("menu.companyAdmin"), onClick: () => setPage("company-admin") }] : []),
+    ...(isCompanyOwner ? [{ id: "companyAdmin", label: t("menu.companyAdmin"), onClick: () => setPage("company-admin") }] : []),
     ...(isSuperAdmin ? [{ id: "admin", label: t("menu.admin"), onClick: () => setPage("admin") }] : []),
     { id: "logout", label: t("menu.logout"), onClick: handleLogout },
   ];
@@ -854,6 +891,7 @@ export default function App() {
     await supabase.auth.signOut();
     setSession(null);
     setCurrentUser(null);
+    window.location.href = "https://kanban-incrzyulw-kanban-pro.vercel.app/";
   }
 
   function withTheme(content: ReactNode) {
@@ -903,6 +941,21 @@ export default function App() {
     headerTitle = "Configuracion de componentes";
     headerSubtitle = componentId;
     mainContent = <ComponentSettingsPage basePath={basePath} componentId={componentId} />;
+  } else if (page === "profile" && currentUser) {
+    headerTitle = t("menu.openProfile");
+    headerSubtitle = currentUser.email;
+    mainContent = (
+      <ProfilePage
+        user={currentUser}
+        themeMode={themeMode}
+        onThemeChange={setThemeMode}
+        onSaved={updated => {
+          setCurrentUser(updated);
+          if (updated.lang) setLang(updated.lang as Lang);
+        }}
+        onBack={() => navigate(boardUrl || basePath || "/")}
+      />
+    );
   } else if (page === "admin" && isSuperAdmin && currentUser) {
     headerTitle = t("menu.admin");
     headerSubtitle = "";
@@ -1224,7 +1277,7 @@ export default function App() {
             <div style={{ padding: "20px 20px 14px", borderBottom: `1px solid ${T.border}` }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 4 }}>{t("app.brand")}</div>
               <button
-                onClick={() => { setProfileOpen(true); setMobileMenuOpen(false); }}
+                onClick={() => { navigate(profileUrl); setMobileMenuOpen(false); }}
                 style={{ fontSize: 12, color: T.textSoft, border: "none", background: "transparent", cursor: "pointer", padding: 0 }}
                 title={getUserFullName(currentUser) || currentUser.name}
               >
@@ -1318,12 +1371,90 @@ export default function App() {
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div style={{ height: 56, background: T.bgSidebar, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 12, padding: "0 18px", boxShadow: T.shadowSm }}>
-          {isMobile && (
-            <button onClick={() => setMobileMenuOpen(true)}
-              style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${T.border}`, background: T.bgElevated, color: T.text, cursor: "pointer" }}>
-              ≡
-            </button>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {isMobile && (
+              <button onClick={() => setMobileMenuOpen(true)}
+                style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${T.border}`, background: T.bgElevated, color: T.text, cursor: "pointer" }}>
+                ≡
+              </button>
+            )}
+            <div style={{ position: "relative" }}>
+              <button
+                ref={topMenuButtonRef}
+                onClick={() => setTopMenuOpen(v => !v)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setTopMenuOpen(true);
+                  }
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setTopMenuOpen(true);
+                  }
+                }}
+                style={{ width: 36, height: 36, borderRadius: 12, border: `1px solid ${T.border}`, background: T.bgElevated, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                aria-haspopup="menu"
+                aria-expanded={topMenuOpen}
+                aria-label={t("menu.menu")}
+              >
+                {currentUser ? <Avatar user={currentUser} size={28} /> : <span style={{ fontSize: 12, color: T.textSoft }}>⋯</span>}
+              </button>
+              {topMenuOpen && (
+                <div
+                  ref={topMenuListRef}
+                  role="menu"
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setTopMenuOpen(false);
+                      topMenuButtonRef.current?.focus();
+                      return;
+                    }
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      const next = (topMenuIndex + 1) % topMenuActions.length;
+                      setTopMenuIndex(next);
+                      topMenuItemRefs.current[next]?.focus();
+                    }
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      const next = (topMenuIndex - 1 + topMenuActions.length) % topMenuActions.length;
+                      setTopMenuIndex(next);
+                      topMenuItemRefs.current[next]?.focus();
+                    }
+                  }}
+                  style={{ position: "absolute", left: 0, top: "110%", minWidth: 180, background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 12, boxShadow: T.shadowMd, padding: 8, zIndex: 500 }}
+                >
+                  {topMenuActions.map((action, idx) => (
+                    <button
+                      key={action.id}
+                      ref={el => { if (el) topMenuItemRefs.current[idx] = el; }}
+                      role="menuitem"
+                      tabIndex={idx === topMenuIndex ? 0 : -1}
+                      onMouseEnter={() => setTopMenuHover(action.id)}
+                      onMouseLeave={() => setTopMenuHover(null)}
+                      onClick={() => { action.onClick(); setTopMenuOpen(false); }}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        padding: "8px 10px",
+                        borderRadius: 8,
+                        border: "none",
+                        background: (topMenuHover === action.id || topMenuIndex === idx) ? T.bgElevated : "transparent",
+                        color: T.text,
+                        cursor: "pointer",
+                        transition: "background-color .15s ease",
+                      }}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: -0.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{headerTitle}</div>
             {headerSubtitle && <div style={{ fontSize: 11, color: T.textMuted }}>{headerSubtitle}</div>}
@@ -1340,25 +1471,6 @@ export default function App() {
               {t("menu.improvements")}
             </button>
           )}
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setTopMenuOpen(v => !v)}
-              style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${T.border}`, background: T.bgElevated, padding: "6px 10px", borderRadius: 10, cursor: "pointer", color: T.textSoft }}>
-              <span style={{ fontSize: 12 }}>{t("menu.menu")}</span>
-            </button>
-            {topMenuOpen && (
-              <div style={{ position: "absolute", right: 0, top: "110%", minWidth: 180, background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 12, boxShadow: T.shadowMd, padding: 8, zIndex: 50 }}>
-                {topMenuActions.map(action => (
-                  <button
-                    key={action.id}
-                    onClick={() => { action.onClick(); setTopMenuOpen(false); }}
-                    style={{ width: "100%", textAlign: "left", fontSize: 12, fontWeight: 600, padding: "8px 10px", borderRadius: 8, border: "none", background: "transparent", color: T.text, cursor: "pointer" }}
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
         <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
