@@ -43,7 +43,7 @@ export function SmartRedirect() {
           break;
       }
     });
-  }, [code, navigate]);
+  }, [code, navigate, basePath]);
 
   if (status === "not_found") {
     return (

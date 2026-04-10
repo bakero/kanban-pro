@@ -165,7 +165,7 @@ export function AdminConsolePage({ currentUser, onBack }: AdminConsolePageProps)
     return () => {
       cancelled = true;
     };
-  }, [selectedCompany?.id]);
+  }, [selectedCompany]);
 
   async function handleCreateCompany() {
     const name = newCompanyName.trim();

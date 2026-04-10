@@ -110,7 +110,7 @@ export default function AdminConsoleApp() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id]);
+  }, [session?.user]);
 
   async function handleGoogleLogin() {
     setAuthBusy(true);

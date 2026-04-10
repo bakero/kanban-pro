@@ -240,7 +240,7 @@ export default function App() {
       return;
     }
     setSecondaryOrder(["newCard", "newBoard", "metrics", "filters", "wip", "improvements", "settings", "companyAdmin", "admin"]);
-  }, [currentUser?.id]);
+  }, [currentUser?.ui_config]);
 
   useEffect(() => {
     let mounted = true;
@@ -308,7 +308,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id]);
+  }, [session?.user]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -416,7 +416,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeCompanyId, currentUser?.id]);
+  }, [activeCompanyId, currentUser]);
 
   useEffect(() => {
     if (!routeTarget?.workspaceId) return;
@@ -520,7 +520,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeProjectId, currentUser?.id]);
+  }, [activeProjectId, currentUser]);
 
   useEffect(() => {
     if (!routeTarget?.boardId) return;
@@ -550,7 +550,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeBoardId, activeProjectId, currentUser?.id]);
+  }, [activeBoardId, activeProjectId, currentUser]);
 
   useEffect(() => {
     if (!routeTarget?.openCardId) return;

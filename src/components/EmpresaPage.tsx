@@ -58,7 +58,7 @@ export function EmpresaPage({ companyCode, currentUser, companyLinks, onBack }: 
       setLoadingMembers(false);
     });
     return () => { cancelled = true; };
-  }, [company?.id]);
+  }, [company]);
 
   useEffect(() => {
     if (!company) return;
@@ -70,7 +70,7 @@ export function EmpresaPage({ companyCode, currentUser, companyLinks, onBack }: 
       setLoadingWorkspaces(false);
     });
     return () => { cancelled = true; };
-  }, [company?.id]);
+  }, [company]);
 
   useEffect(() => {
     if (!company) return;
@@ -86,7 +86,7 @@ export function EmpresaPage({ companyCode, currentUser, companyLinks, onBack }: 
       setLoadingProjects(false);
     })();
     return () => { cancelled = true; };
-  }, [company?.id]);
+  }, [company]);
 
   const isMember = useMemo(() => companyLinks.some(link => link.company.id === company?.id), [companyLinks, company?.id]);
   const isOwner = !!company && (company.owner_id === currentUser.id || company.owner_user_id === currentUser.id);

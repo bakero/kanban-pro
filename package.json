@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty false",
     "check": "npm run typecheck && npm run lint",
-    "test:regression": "echo \"No regression tests configured yet\""
+    "test:e2e": "playwright test",
+    "test:regression": "playwright test --grep @regression"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
