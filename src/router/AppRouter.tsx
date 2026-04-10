@@ -71,6 +71,10 @@ export function AppRouter() {
       <Route path="/workspace/:workspaceNumericId" element={<App />} />
       <Route path="/app/workspace/:workspaceNumericId" element={<App />} />
 
+      {/* Company page by company_code */}
+      <Route path="/empresa/:companyCode" element={<App />} />
+      <Route path="/app/empresa/:companyCode" element={<App />} />
+
       {/* Hierarchical IDs: /company(/workspace)/project/board(/card) */}
       <Route path="/:companyId/:projectId/:boardId" element={<App />} />
       <Route path="/:companyId/:projectId/:boardId/:cardId" element={<App />} />

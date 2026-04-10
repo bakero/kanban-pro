@@ -287,6 +287,19 @@ Usa este bloque cada vez que se implemente una funcionalidad nueva. La idea es d
 - Archivos principales: `src/App.tsx`, `src/components/ProfilePage.tsx`, `src/router/AppRouter.tsx`, `docs-site/src/content/docs/app/funcionalidades/14-menu-funcionalidades.mdx`.
 - Notas tecnicas: el menu implementa soporte de teclado y z-index alto para mostrarse sobre todo el contenido.
 
+### Pagina de empresa con widgets
+- Estado: `implementada`
+- Fecha: 2026-04-10
+- Objetivo: ofrecer una vista centralizada con informacion general, proyectos, espacios y estado anual.
+- Pantalla o contexto: ruta `/empresa/:companyCode` dentro de la app principal.
+- Tipo: `UI` | `logica` | `datos`
+- Descripcion funcional: la pagina muestra informacion general de la empresa y widgets con listados, estado anual y objetivos.
+- Funcionamiento: carga empresa por `company_code`, valida acceso y muestra widgets con paginacion de 15 elementos y filtros en cabecera; el responsable puede activar o desactivar widgets desde el panel lateral.
+- Reglas de negocio: solo miembros, responsable o informador acceden; el responsable controla los widgets.
+- Impacto en usuario: la empresa tiene un dashboard unico para seguimiento rapido.
+- Archivos principales: `src/components/EmpresaPage.tsx`, `src/lib/db.ts`, `src/router/AppRouter.tsx`, `src/App.tsx`, `docs-site/src/content/docs/app/funcionalidades/15-pagina-empresa.mdx`.
+- Notas tecnicas: los widgets cargan datos de forma asincrona y muestran indicador de carga.
+
 ## Entradas futuras
 
 ### Documentacion interactiva de funcionalidades y pruebas

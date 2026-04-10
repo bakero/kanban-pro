@@ -40,6 +40,8 @@ export interface Company {
   license_expires_at?: string | null;
   created_by: string;
   owner_id?: string | null;
+  owner_user_id?: string | null;
+  reporter_user_id?: string | null;
   created_at: string;
   is_active: boolean;
 }

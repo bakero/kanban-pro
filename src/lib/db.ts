@@ -225,6 +225,16 @@ export async function updateCompany(company: Company) {
   if (error) console.error("updateCompany error:", error);
 }
 
+export async function resolveCompanyByCode(companyCode: string): Promise<Company | null> {
+  const code = companyCode.trim().toUpperCase();
+  const { data } = await supabase
+    .from("companies")
+    .select("*")
+    .eq("company_code", code)
+    .maybeSingle();
+  return (data || null) as Company | null;
+}
+
 export async function loadCompanySettings(companyId: string): Promise<CompanySettings | null> {
   const { data } = await supabase
     .from("company_settings")

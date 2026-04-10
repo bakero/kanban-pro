@@ -48,6 +48,7 @@ import { CompanyAdminPage } from "./admin/CompanyAdminPage";
 import { PhaseLegend } from "./components/layout/PhaseLegend";
 import { SecondaryBar } from "./components/layout/SecondaryBar";
 import { SecondaryBarEditor } from "./components/layout/SecondaryBarEditor";
+import { EmpresaPage } from "./components/EmpresaPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { UserProfilePanel } from "./components/UserProfilePanel";
 import { Avatar } from "./components/ui/Avatar";
@@ -68,14 +69,14 @@ import type {
   Workspace,
 } from "./types";
 import { LangContext, translate, type Lang, type TranslationKey } from "./i18n";
-type AppPage = "board" | "settings" | "improvements" | "admin" | "company-admin" | "component-settings-list" | "component-settings" | "profile";
+type AppPage = "board" | "settings" | "improvements" | "admin" | "company-admin" | "component-settings-list" | "component-settings" | "profile" | "company";
 
 export default function App() {
   const prefersDark = usePrefersDark();
   const location = useLocation();
   const navigate = useNavigate();
   const basePath = location.pathname.startsWith("/app") ? "/app" : "";
-  const { boardNumericId, workspaceNumericId, openCardId, companyId, workspaceId, projectId, boardId, cardId, componentId } = useParams<{
+  const { boardNumericId, workspaceNumericId, openCardId, companyId, workspaceId, projectId, boardId, cardId, componentId, companyCode } = useParams<{
     boardNumericId?: string;
     workspaceNumericId?: string;
     openCardId?: string;
@@ -85,6 +86,7 @@ export default function App() {
     boardId?: string;
     cardId?: string;
     componentId?: string;
+    companyCode?: string;
   }>();
 
   const [lang, setLang] = useState<Lang>("es");
@@ -215,6 +217,7 @@ export default function App() {
   useEffect(() => {
     const isComponentRoute = location.pathname.includes("/config/components");
     const isProfileRoute = location.pathname.endsWith("/perfil") || location.pathname.endsWith("/perfil/");
+    const isCompanyRoute = location.pathname.includes("/empresa/");
     if (isComponentRoute) {
       setPage(componentId ? "component-settings" : "component-settings-list");
       return;
@@ -223,10 +226,17 @@ export default function App() {
       setPage("profile");
       return;
     }
+    if (isCompanyRoute) {
+      setPage("company");
+      return;
+    }
     if (page === "component-settings" || page === "component-settings-list") {
       setPage("board");
     }
     if (page === "profile" && !isProfileRoute) {
+      setPage("board");
+    }
+    if (page === "company" && !isCompanyRoute) {
       setPage("board");
     }
   }, [location.pathname, componentId, page]);
@@ -588,7 +598,7 @@ export default function App() {
   const profileUrl = basePath ? `${basePath}/perfil` : "/perfil";
   const activeProject = projects.find(p => p.id === activeProjectId) || null;
   const myProjectRole = projectMembers.find(m => m.user_id === currentUser?.id)?.role || "member";
-  const isCompanyOwner = !!(company && currentUser && company.owner_id === currentUser.id);
+  const isCompanyOwner = !!(company && currentUser && (company.owner_id === currentUser.id || company.owner_user_id === currentUser.id));
   const discardStateIds = new Set(states.filter(s => s.is_discard).map(s => s.id));
   const wipCols = columns.filter(c => c.is_wip);
   const doneColIds = columns.filter(c => c.phase === "post").map(c => c.id);
@@ -953,6 +963,17 @@ export default function App() {
           setCurrentUser(updated);
           if (updated.lang) setLang(updated.lang as Lang);
         }}
+        onBack={() => navigate(boardUrl || basePath || "/")}
+      />
+    );
+  } else if (page === "company" && currentUser && companyCode) {
+    headerTitle = "Empresa";
+    headerSubtitle = companyCode.toUpperCase();
+    mainContent = (
+      <EmpresaPage
+        companyCode={companyCode}
+        currentUser={currentUser}
+        companyLinks={companyLinks}
         onBack={() => navigate(boardUrl || basePath || "/")}
       />
     );

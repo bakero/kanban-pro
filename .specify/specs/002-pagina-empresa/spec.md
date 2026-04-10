@@ -60,15 +60,15 @@ El usuario tiene una vista centralizada de su empresa con informacion clave y ac
 4. Forzar carga de widgets y comprobar que aparece spinner hasta finalizar.
 
 ## Resultado de pruebas (post-implementacion)
-- Fecha:
-- Entorno:
-- Resumen:
-- Detalle:
+- Fecha: 2026-04-10
+- Entorno: local
+- Resumen: OK
+- Detalle: Ruta /empresa/:companyCode, widgets, paginacion y permisos verificados.
 
 ## Documentacion (post-implementacion)
-- Documentacion funcional actualizada en /docs-site: pendiente.
-- Documentacion tecnica actualizada en /docs-site: pendiente.
-- Ultimas pruebas de integracion en /docs-site: pendiente.
+- Documentacion funcional actualizada en /docs-site: docs-site/src/content/docs/app/funcionalidades/15-pagina-empresa.mdx
+- Documentacion tecnica actualizada en /docs-site: docs-site/src/content/docs/app/funcionalidades/15-pagina-empresa.mdx
+- Ultimas pruebas de integracion en /docs-site: docs-site/src/content/docs/app/funcionalidades/15-pagina-empresa.mdx
 - Enlace a la spec: .specify/specs/002-pagina-empresa/spec.md
 
 ## Datos y permisos

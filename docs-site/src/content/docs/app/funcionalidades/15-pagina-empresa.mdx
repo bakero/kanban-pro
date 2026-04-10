@@ -1,0 +1,45 @@
+---
+title: Pagina de empresa
+description: Dashboard centralizado con informacion y widgets por empresa.
+---
+
+import LastRunLinks from "../../../../components/LastRunLinks.astro";
+
+## Objetivo
+Mostrar de un vistazo la informacion clave de una empresa y sus proyectos.
+
+## Funcionamiento
+- Ruta `/empresa/:companyCode`.
+- Bloque de informacion general con conteos.
+- Widgets de proyectos, espacios, estado anual y objetivos.
+- Panel lateral para activar o desactivar widgets (solo responsable).
+
+## Reglas de negocio
+- Acceso solo para miembros, responsable o informador.
+- El responsable controla la visibilidad de widgets.
+
+## Requisitos funcionales
+- Listados paginados de 15 elementos con filtros.
+- Grafico circular con estado de proyectos del ano en curso.
+- Objetivos con porcentaje numerico.
+
+## Requisitos no funcionales
+- Cargas asincronas con indicador visible.
+
+## Escenarios de prueba
+1. Acceso con responsable y gestion de widgets.
+2. Acceso con informador sin permisos de edicion.
+3. Paginacion y filtros (15 por pagina).
+4. Spinner durante carga de widgets.
+
+## Ultimas pruebas de integracion (manual)
+- Entorno: local
+- Resultado: OK
+
+## Ultima ejecucion automatizada
+<LastRunLinks label="Regresion (master)" key="regression_master" />
+<LastRunLinks label="Preview E2E" key="preview_e2e" />
+<LastRunLinks label="Produccion E2E" key="production_e2e" />
+
+## Spec
+- `.specify/specs/002-pagina-empresa/spec.md`

@@ -13,6 +13,8 @@ export const componentCatalog: ComponentCatalogEntry[] = [
   { id: "login-page", name: "LoginPage", path: "src/components/LoginPage.tsx", category: "negocio", description: "Pantalla de acceso de usuarios." },
   { id: "settings-page", name: "SettingsPage", path: "src/components/settings/SettingsPage.tsx", category: "negocio", description: "Configuracion funcional del tablero, miembros y empresa." },
   { id: "improvements-page", name: "ImprovementsPage", path: "src/components/ImprovementsPage.tsx", category: "negocio", description: "Gestion y votacion de mejoras por empresa." },
+  { id: "empresa-page", name: "EmpresaPage", path: "src/components/EmpresaPage.tsx", category: "negocio", description: "Pagina de empresa con widgets y dashboard." },
+  { id: "profile-page", name: "ProfilePage", path: "src/components/ProfilePage.tsx", category: "negocio", description: "Pantalla de datos del perfil de usuario." },
   { id: "user-profile-panel", name: "UserProfilePanel", path: "src/components/UserProfilePanel.tsx", category: "negocio", description: "Panel de perfil del usuario conectado." },
   { id: "legal-page", name: "LegalPage", path: "src/components/legal/LegalPage.tsx", category: "negocio", description: "Paginas legales publicas." },
   { id: "admin-console-app", name: "AdminConsoleApp", path: "src/AdminConsoleApp.tsx", category: "negocio", description: "Shell de la consola administrativa global." },
