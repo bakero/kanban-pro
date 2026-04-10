@@ -318,6 +318,7 @@
   "profile.updateError": "No se pudo actualizar el perfil",
   "profile.fileTooLarge": "El archivo supera el máximo permitido (512 KB).",
   "profile.fileTypeError": "Formato no válido. Usa JPG, PNG o WebP.",
+  "profile.saving": "Guardando...",
 
   "history.system": "Sistema",
   "history.cardCreated": "Tarjeta creada",

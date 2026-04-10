@@ -69,7 +69,7 @@ export function ProfilePage({ user, themeMode, onThemeChange, onSaved, onBack }:
       return;
     }
     if (!allowed.includes(next.type)) {
-      setError(t("profile.fileType"));
+      setError(t("profile.fileTypeError"));
       return;
     }
     setFile(next);
@@ -97,11 +97,11 @@ export function ProfilePage({ user, themeMode, onThemeChange, onSaved, onBack }:
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 20 }}>
         <div style={{ background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 16, padding: 18 }}>
-          <p style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 700, color: T.textSoft }}>{t("profile.photo")}</p>
+          <p style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 700, color: T.textSoft }}>{t("profile.avatar")}</p>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             {previewUrl ? <img src={previewUrl} alt={user.name} style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover" }} /> : <Avatar user={{ ...user, avatar_url: avatarUrl }} size={64} />}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <Btn onClick={() => fileRef.current?.click()}>{t("profile.changePhoto")}</Btn>
+              <Btn onClick={() => fileRef.current?.click()}>{t("profile.upload")}</Btn>
               <input
                 ref={fileRef}
                 type="file"
@@ -114,7 +114,7 @@ export function ProfilePage({ user, themeMode, onThemeChange, onSaved, onBack }:
                   onClick={() => { setAvatarUrl(null); setFile(null); }}
                   style={{ border: "none", background: "transparent", color: T.textSoft, cursor: "pointer", fontSize: 11 }}
                 >
-                  {t("profile.removePhoto")}
+                  {t("profile.remove")}
                 </button>
               )}
             </div>
@@ -122,7 +122,7 @@ export function ProfilePage({ user, themeMode, onThemeChange, onSaved, onBack }:
         </div>
 
         <div style={{ background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 16, padding: 18 }}>
-          <p style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 700, color: T.textSoft }}>{t("profile.info")}</p>
+          <p style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 700, color: T.textSoft }}>{t("profile.title")}</p>
           <div style={{ display: "grid", gap: 10 }}>
             <div>
               <label style={{ fontSize: 11, color: T.textSoft }}>{t("profile.firstName")}</label>

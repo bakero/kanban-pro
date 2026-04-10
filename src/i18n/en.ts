@@ -273,6 +273,7 @@
   "profile.updateError": "Could not update profile",
   "profile.fileTooLarge": "The file exceeds the maximum allowed (512 KB).",
   "profile.fileTypeError": "Invalid format. Use JPG, PNG, or WebP.",
+  "profile.saving": "Saving...",
 
   "history.system": "System",
   "history.cardCreated": "Card created",

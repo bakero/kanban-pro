@@ -152,7 +152,6 @@ export function EmpresaPage({ companyCode, currentUser, companyLinks, onBack }: 
   };
   const totalStatus = Math.max(1, statusCounts.activos + statusCounts.archivados);
   const activePct = Math.round((statusCounts.activos / totalStatus) * 100);
-  const archivedPct = 100 - activePct;
 
   const goalProgress = 0;
 

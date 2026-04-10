@@ -171,14 +171,6 @@ export default function App() {
 
   useEffect(() => { setActiveMobileColIdx(0); }, [activeBoardId]);
 
-  useEffect(() => {
-    if (!topMenuOpen) return;
-    setTopMenuIndex(0);
-    requestAnimationFrame(() => {
-      topMenuItemRefs.current[0]?.focus();
-    });
-  }, [topMenuOpen, topMenuActions.length]);
-
   const userThemeKey = currentUser?.email ? `kanban-pro:theme:${currentUser.email.toLowerCase()}` : null;
   const T = resolveTheme(themeMode, prefersDark);
 
@@ -694,6 +686,14 @@ export default function App() {
     ...(isSuperAdmin ? [{ id: "admin", label: t("menu.admin"), onClick: () => setPage("admin") }] : []),
     { id: "logout", label: t("menu.logout"), onClick: handleLogout },
   ];
+
+  useEffect(() => {
+    if (!topMenuOpen) return;
+    setTopMenuIndex(0);
+    requestAnimationFrame(() => {
+      topMenuItemRefs.current[0]?.focus();
+    });
+  }, [topMenuOpen, topMenuActions.length]);
 
   function cardVisible(c: Card) {
     const hide = board?.board_config?.hideDoneAfterDays || 0;
@@ -1234,7 +1234,7 @@ export default function App() {
     <div style={{ fontFamily: FONT, backgroundColor: T.bg, height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", color: T.text }}>
 
       {/* Modals */}
-      {modal && (
+      {modal && board && company && currentUser && (
         <CardModal
           card={modal}
           board={board}
@@ -1300,9 +1300,9 @@ export default function App() {
               <button
                 onClick={() => { navigate(profileUrl); setMobileMenuOpen(false); }}
                 style={{ fontSize: 12, color: T.textSoft, border: "none", background: "transparent", cursor: "pointer", padding: 0 }}
-                title={getUserFullName(currentUser) || currentUser.name}
+                title={currentUser ? (getUserFullName(currentUser) || currentUser.name) : "Usuario"}
               >
-                {getUserFullName(currentUser) || currentUser.name}
+                {currentUser ? (getUserFullName(currentUser) || currentUser.name) : "Usuario"}
               </button>
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
