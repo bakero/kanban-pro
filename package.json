@@ -12,7 +12,8 @@
     "typecheck": "tsc -b --pretty false",
     "check": "npm run typecheck && npm run lint",
     "test:e2e": "playwright test",
-    "test:regression": "playwright test --grep @regression"
+    "test:regression": "playwright test --grep @regression",
+    "e2e:auth": "node scripts/save-auth-state.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
