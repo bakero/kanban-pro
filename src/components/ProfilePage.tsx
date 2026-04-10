@@ -87,7 +87,7 @@ export function ProfilePage({ user, themeMode, onThemeChange, onSaved, onBack }:
   };
 
   return (
-    <div style={{ padding: 24, fontFamily: FONT, color: T.text, overflowY: "auto" }}>
+    <div style={{ padding: 24, fontFamily: FONT, color: T.text, overflowY: "auto" }} data-testid="profile-page">
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
         <button onClick={onBack} style={{ border: "none", background: "transparent", color: T.textSoft, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
           {t("common.back")}

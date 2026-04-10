@@ -182,7 +182,7 @@ export function EmpresaPage({ companyCode, currentUser, companyLinks, onBack }: 
   }
 
   return (
-    <div style={{ display: "flex", gap: 20, padding: 24, fontFamily: FONT, color: T.text }}>
+    <div style={{ display: "flex", gap: 20, padding: 24, fontFamily: FONT, color: T.text }} data-testid="empresa-page">
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={onBack} style={{ border: "none", background: "transparent", color: T.textSoft, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
@@ -201,7 +201,7 @@ export function EmpresaPage({ companyCode, currentUser, companyLinks, onBack }: 
         </div>
 
         {visibleWidgets.projects && (
-          <WidgetCard title="Proyectos" loading={loadingProjects}>
+          <WidgetCard title="Proyectos" loading={loadingProjects} testId="empresa-widget-projects">
             <FilterRow filters={projectFilters} onChange={setProjectFilters} />
             <DataTable rows={pagedProjects} />
             <Pagination page={projectPage} total={filteredProjects.length} pageSize={pageSize} onPageChange={setProjectPage} />
@@ -209,7 +209,7 @@ export function EmpresaPage({ companyCode, currentUser, companyLinks, onBack }: 
         )}
 
         {visibleWidgets.workspaces && (
-          <WidgetCard title="Espacios de trabajo" loading={loadingWorkspaces}>
+          <WidgetCard title="Espacios de trabajo" loading={loadingWorkspaces} testId="empresa-widget-workspaces">
             <FilterRow filters={workspaceFilters} onChange={setWorkspaceFilters} />
             <DataTable rows={pagedWorkspaces} />
             <Pagination page={workspacePage} total={filteredWorkspaces.length} pageSize={pageSize} onPageChange={setWorkspacePage} />
@@ -217,7 +217,7 @@ export function EmpresaPage({ companyCode, currentUser, companyLinks, onBack }: 
         )}
 
         {visibleWidgets.status && (
-          <WidgetCard title="Estado de proyectos (ano en curso)" loading={loadingProjects}>
+          <WidgetCard title="Estado de proyectos (ano en curso)" loading={loadingProjects} testId="empresa-widget-status">
             <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
               <DonutChart value={activePct} color={T.accent} bg={T.borderStrong} />
               <div style={{ fontSize: 12, color: T.textSoft }}>
@@ -229,7 +229,7 @@ export function EmpresaPage({ companyCode, currentUser, companyLinks, onBack }: 
         )}
 
         {visibleWidgets.objectives && (
-          <WidgetCard title="Objetivos de empresa" loading={false}>
+          <WidgetCard title="Objetivos de empresa" loading={false} testId="empresa-widget-objectives">
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ width: 120, height: 8, borderRadius: 999, background: T.borderStrong }}>
                 <div style={{ width: `${Math.min(100, goalProgress)}%`, height: "100%", background: T.success, borderRadius: 999 }} />
@@ -241,7 +241,7 @@ export function EmpresaPage({ companyCode, currentUser, companyLinks, onBack }: 
         )}
       </div>
 
-      <aside style={{ width: 240, flexShrink: 0, background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, height: "fit-content" }}>
+      <aside style={{ width: 240, flexShrink: 0, background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, height: "fit-content" }} data-testid="empresa-widgets-panel">
         <h3 style={{ margin: "0 0 10px", fontSize: 14, fontWeight: 800 }}>Widgets</h3>
         {isOwner ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -280,10 +280,10 @@ function InfoItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function WidgetCard({ title, loading, children }: { title: string; loading: boolean; children: React.ReactNode }) {
+function WidgetCard({ title, loading, children, testId }: { title: string; loading: boolean; children: React.ReactNode; testId?: string }) {
   const T = useTheme();
   return (
-    <div style={{ background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16 }}>
+    <div style={{ background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16 }} data-testid={testId}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>{title}</h3>
         {loading && <Spinner />}

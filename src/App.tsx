@@ -1417,6 +1417,7 @@ export default function App() {
                 aria-haspopup="menu"
                 aria-expanded={topMenuOpen}
                 aria-label={t("menu.menu")}
+                data-testid="topbar-menu-button"
               >
                 {currentUser ? <Avatar user={currentUser} size={28} /> : <span style={{ fontSize: 12, color: T.textSoft }}>⋯</span>}
               </button>
@@ -1445,6 +1446,7 @@ export default function App() {
                     }
                   }}
                   style={{ position: "absolute", left: 0, top: "110%", minWidth: 180, background: T.bgSidebar, border: `1px solid ${T.border}`, borderRadius: 12, boxShadow: T.shadowMd, padding: 8, zIndex: 500 }}
+                  data-testid="topbar-menu"
                 >
                   {topMenuActions.map((action, idx) => (
                     <button
@@ -1455,6 +1457,7 @@ export default function App() {
                       onMouseEnter={() => setTopMenuHover(action.id)}
                       onMouseLeave={() => setTopMenuHover(null)}
                       onClick={() => { action.onClick(); setTopMenuOpen(false); }}
+                      data-testid={`topbar-menu-item-${action.id}`}
                       style={{
                         width: "100%",
                         textAlign: "left",
